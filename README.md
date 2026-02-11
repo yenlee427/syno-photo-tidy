@@ -62,6 +62,12 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 - 去重、命名、封存、回滾完整流程
 - 進度視窗與回滾摘要
 
+## v1.0 Release Notes
+- 新增 CLI：`dry-run`/`execute`/`rollback`
+- 新增設定檔編輯、匯入/匯出
+- 進度視窗加入細節與 ETA
+- 精確去重使用 size + 多重 hash，並支援 hash 併行
+
 ## 安全規範（不可違反）
 - 程式**不得**呼叫 delete/unlink/rmtree，且不提供刪除 UI/CLI。
 - 同磁碟搬移：使用 `shutil.move`。
@@ -88,6 +94,25 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 4. 執行測試：
    ```bash
    pytest
+   ```
+
+## 換電腦使用（穩定流程）
+以下方式穩定度最高，適合長期使用與除錯：
+1. 複製整個專案資料夾（例如 `syno-photo-tidy/`）到新電腦。
+2. 安裝 Python 3.10 以上版本。
+3. 在專案根目錄建立並啟用虛擬環境：
+   ```bash
+   python -m venv venv
+   venv\Scripts\activate
+   ```
+4. 安裝依賴與專案：
+   ```bash
+   pip install -r requirements.txt -r requirements-dev.txt
+   pip install -e .
+   ```
+5. 啟動 GUI：
+   ```bash
+   python -m syno_photo_tidy
    ```
 
 ## 設定檔
