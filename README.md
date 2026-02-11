@@ -45,10 +45,15 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 - Rollback 選擇視窗（rollback dialog）
 - Pipeline 協調模組
 
-## v0.8 進行中
+## v0.8 已完成
 - 進度視窗強化（細節/耗時）
 - 回滾視窗摘要強化
 - GUI 改用 Pipeline
+
+## v0.9 進行中
+- CLI 介面（dry-run/execute/rollback）
+- 設定檔 UI 強化
+- 效能優化
 
 ## 安全規範（不可違反）
 - 程式**不得**呼叫 delete/unlink/rmtree，且不提供刪除 UI/CLI。
@@ -58,7 +63,7 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 - 若 action plan 為空：顯示 `No changes needed`，只輸出報告，不做任何 move/rename。
 - 所有 planned actions 與 execute 結果都要寫入 `manifest.jsonl`（支援 `.partial` 中斷恢復骨架）。
 
-## 安裝與執行（v0.8）
+## 安裝與執行（v0.9）
 1. 建立虛擬環境並安裝依賴：
    ```bash
    python -m venv venv
@@ -105,4 +110,5 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 - PR #13：回滾引擎（Rollback Last Run）
 - PR #14：進階視窗與 Pipeline
 - PR #15：v0.8 視窗強化與 Pipeline 接 GUI
+- PR #16：CLI 與效能優化
   - `max_file_kb`
