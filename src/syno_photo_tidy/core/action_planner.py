@@ -29,9 +29,14 @@ class ActionPlanner:
         source_root: Path,
         output_root: Path,
         duplicates: list[FileInfo] | None = None,
+        duplicates_with_reason: list[tuple[FileInfo, str]] | None = None,
     ) -> PlanResult:
         plan: list[ActionItem] = []
         duplicates = duplicates or []
+        if duplicates_with_reason is None:
+            duplicates_with_reason = [(item, "DUPLICATE_HASH") for item in duplicates]
+        else:
+            duplicates = [item for item, _ in duplicates_with_reason]
         for item in thumbnails:
             dst_path = self._build_thumbnail_destination(item.path, source_root, output_root)
             plan.append(
@@ -43,12 +48,12 @@ class ActionPlanner:
                 )
             )
 
-        for item in duplicates:
+        for item, reason in duplicates_with_reason:
             dst_path = self._build_duplicate_destination(item.path, source_root, output_root)
             plan.append(
                 ActionItem(
                     action="MOVE",
-                    reason="DUPLICATE_HASH",
+                    reason=reason,
                     src_path=item.path,
                     dst_path=dst_path,
                 )

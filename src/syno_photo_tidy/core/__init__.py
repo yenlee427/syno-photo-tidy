@@ -11,6 +11,7 @@ from .manifest import (
 )
 from .scanner import FileScanner
 from .thumbnail_detector import ThumbnailDetector
+from .visual_deduper import VisualDeduper
 
 __all__ = [
     "ActionPlanner",
@@ -21,5 +22,6 @@ __all__ = [
     "ManifestWriter",
     "append_manifest_entries",
     "ThumbnailDetector",
+    "VisualDeduper",
     "read_manifest_records",
 ]

@@ -51,3 +51,20 @@ def get_exif_datetime_original(path: Path, logger=None) -> Optional[str]:
         if logger is not None:
             logger.warning(f"無法讀取 EXIF: {path} ({exc})")
         return None
+
+
+def compute_phash(path: Path, logger=None):
+    _register_heif_opener()
+    try:
+        import imagehash
+
+        with Image.open(path) as image:
+            return imagehash.phash(image)
+    except ImportError as exc:
+        if logger is not None:
+            logger.warning(f"imagehash 未安裝，無法計算 pHash: {exc}")
+        return None
+    except Exception as exc:
+        if logger is not None:
+            logger.warning(f"無法計算 pHash: {path} ({exc})")
+        return None

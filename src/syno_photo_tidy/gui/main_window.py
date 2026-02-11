@@ -17,6 +17,7 @@ from ..core import (
     ManifestContext,
     PlanExecutor,
     ThumbnailDetector,
+    VisualDeduper,
     append_manifest_entries,
 )
 from ..utils import path_utils, reporting, time_utils
@@ -34,6 +35,7 @@ class MainWindow:
         self.scanner = FileScanner(self.config, self.logger)
         self.thumbnail_detector = ThumbnailDetector(self.config, self.logger)
         self.exact_deduper = ExactDeduper(self.config, self.logger)
+        self.visual_deduper = VisualDeduper(self.config, self.logger)
         self.action_planner = ActionPlanner(self.config, self.logger)
         self.executor = PlanExecutor(self.logger)
         self.root = tk.Tk()
@@ -155,11 +157,22 @@ class MainWindow:
         self.queue.put({"type": "stage", "message": "階段: Exact hash dedupe..."})
         dedupe_result = self.exact_deduper.dedupe(keepers)
         keepers = dedupe_result.keepers
-        duplicates = dedupe_result.duplicates
+        exact_duplicates = dedupe_result.duplicates
         self.queue.put(
             {
                 "type": "log",
-                "message": f"偵測到 {len(duplicates)} 個重複檔案",
+                "message": f"偵測到 {len(exact_duplicates)} 個精確重複檔案",
+            }
+        )
+
+        self.queue.put({"type": "stage", "message": "階段: Visual hash dedupe..."})
+        visual_result = self.visual_deduper.dedupe(keepers)
+        keepers = visual_result.keepers
+        visual_duplicates = visual_result.duplicates
+        self.queue.put(
+            {
+                "type": "log",
+                "message": f"偵測到 {len(visual_duplicates)} 個相似重複檔案",
             }
         )
 
@@ -170,12 +183,16 @@ class MainWindow:
             timestamp = time_utils.get_timestamp_for_folder()
             output_root = source_path / f"Processed_{timestamp}"
 
+        duplicates_with_reason = (
+            [(item, "DUPLICATE_HASH") for item in exact_duplicates]
+            + [(item, "DUPLICATE_PHASH") for item in visual_duplicates]
+        )
         plan_result = self.action_planner.generate_plan(
             keepers,
             thumbnails,
             source_root=source_path,
             output_root=output_root,
-            duplicates=duplicates,
+            duplicates_with_reason=duplicates_with_reason,
         )
 
         no_changes = self.action_planner.is_no_changes_needed(plan_result.plan)
@@ -185,7 +202,8 @@ class MainWindow:
         total_size = sum(item.size_bytes for item in results)
         thumbnail_size = sum(item.size_bytes for item in thumbnails)
         keeper_size = sum(item.size_bytes for item in keepers)
-        duplicate_size = sum(item.size_bytes for item in duplicates)
+        exact_duplicate_size = sum(item.size_bytes for item in exact_duplicates)
+        visual_duplicate_size = sum(item.size_bytes for item in visual_duplicates)
         format_counts: dict[str, int] = {}
         for item in results:
             format_counts[item.ext] = format_counts.get(item.ext, 0) + 1
@@ -202,10 +220,12 @@ class MainWindow:
             thumbnail_size_bytes=thumbnail_size,
             keeper_count=len(keepers),
             keeper_size_bytes=keeper_size,
-            duplicate_count=len(duplicates),
-            duplicate_size_bytes=duplicate_size,
+            exact_duplicate_count=len(exact_duplicates),
+            exact_duplicate_size_bytes=exact_duplicate_size,
+            visual_duplicate_count=len(visual_duplicates),
+            visual_duplicate_size_bytes=visual_duplicate_size,
             planned_thumbnail_move_count=len(thumbnails),
-            planned_duplicate_move_count=len(duplicates),
+            planned_duplicate_move_count=len(exact_duplicates) + len(visual_duplicates),
             cross_drive_copy=cross_drive_copy,
             no_changes_needed=no_changes,
         )

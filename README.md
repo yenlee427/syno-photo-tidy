@@ -25,6 +25,14 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 - Dry-run 報告新增重複檔案統計
 - 單元測試與整合測試更新
 
+## v0.3 已完成
+- 安全搬移/跨磁碟 copy 機制
+- Execute 流程接線（GUI + manifest 追加執行結果）
+
+## v0.4 已完成
+- 相似去重（pHash）
+- 報告分開統計精確/相似重複
+
 ## 安全規範（不可違反）
 - 程式**不得**呼叫 delete/unlink/rmtree，且不提供刪除 UI/CLI。
 - 同磁碟搬移：使用 `shutil.move`。
@@ -33,7 +41,7 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 - 若 action plan 為空：顯示 `No changes needed`，只輸出報告，不做任何 move/rename。
 - 所有 planned actions 與 execute 結果都要寫入 `manifest.jsonl`（支援 `.partial` 中斷恢復骨架）。
 
-## 安裝與執行（v0.2）
+## 安裝與執行（v0.4）
 1. 建立虛擬環境並安裝依賴：
    ```bash
    python -m venv venv
@@ -62,7 +70,7 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
   - `thumbnail.min_dimension_px`
 
 ## v0.1 限制
-- 目前尚未提供實際搬移與回滾執行。
+- 目前尚未提供回滾執行。
 
 ## 開發路線（對照 execution-plan）
 - PR #1：專案初始化與設定系統
@@ -73,4 +81,6 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 - PR #6：精確雜湊去重
 - PR #7：Manifest 管理
 - PR #8：Dry-run 報告更新
+- PR #9：執行/搬移引擎
+- PR #10：相似去重（pHash）
   - `max_file_kb`

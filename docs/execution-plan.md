@@ -474,6 +474,67 @@ syno-photo-tidy/
 └── execution-plan.md                    # 更新 v0.2 計畫
 ```
 
+---
+
+## v0.3 目標
+
+新增功能與改進：
+1. **執行/搬移引擎** - 安全 move/copy 機制，支援跨磁碟操作。
+2. **Execute 接線** - GUI 執行流程與 manifest 追加執行結果。
+
+**預計時間**：2 天  
+**版本號**：0.3.0
+
+---
+
+## v0.3 工作分解（按 PR 順序）
+
+### PR #9: 執行/搬移引擎 (2天)
+
+**工作內容**：
+- [x] 實作 `utils/file_ops.py` - 安全 move/copy。
+- [x] 實作 `core/executor.py` - 計畫執行器。
+- [x] GUI Execute 接線（執行 + 追加 manifest）。
+- [x] 單元測試：
+    - [x] `test_file_ops.py`
+    - [x] `test_executor.py`
+
+**驗收標準**：
+- Execute 可依計畫完成搬移/複製。
+- manifest 追加實際執行結果（MOVED/COPIED/ERROR）。
+- 單元測試通過。
+
+---
+
+## v0.4 目標
+
+新增功能與改進：
+1. **相似去重** - pHash 相似度比對，篩出視覺相似重複。
+2. **報告更新** - 分開統計精確/相似重複。
+
+**預計時間**：2 天  
+**版本號**：0.4.0
+
+---
+
+## v0.4 工作分解（按 PR 順序）
+
+### PR #10: 相似去重 (2天)
+
+**工作內容**：
+- [x] 實作 `core/visual_deduper.py` - pHash 相似去重。
+- [x] 更新 `utils/image_utils.py` - pHash 計算。
+- [x] 更新 `utils/reporting.py` - 精確/相似去重分離統計。
+- [x] 更新 GUI 流程與行動計畫 reason。
+- [x] 測試：
+    - [x] `test_visual_deduper.py`
+    - [x] `test_basic_workflow.py`
+
+**驗收標準**：
+- 相似去重可依 pHash 門檻辨識重複。
+- 報告分開顯示精確/相似重複統計。
+- 測試通過。
+
 **符號說明**：
 - ✅ = v0.1 實作並測試通過
 - v0.X = 後續版本實作

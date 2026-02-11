@@ -24,8 +24,10 @@ class SummaryInfo:
     thumbnail_size_bytes: int
     keeper_count: int
     keeper_size_bytes: int
-    duplicate_count: int
-    duplicate_size_bytes: int
+    exact_duplicate_count: int
+    exact_duplicate_size_bytes: int
+    visual_duplicate_count: int
+    visual_duplicate_size_bytes: int
     planned_thumbnail_move_count: int
     planned_duplicate_move_count: int
     cross_drive_copy: bool
@@ -81,8 +83,9 @@ def build_summary_text(info: SummaryInfo) -> str:
         f"偵測為縮圖: {info.thumbnail_count} 個 ({format_bytes_gb(info.thumbnail_size_bytes)})",
         f"保留為原圖: {info.keeper_count} 個 ({format_bytes_gb(info.keeper_size_bytes)})",
         "",
-        "--- 精確去重 ---",
-        f"偵測為重複: {info.duplicate_count} 個 ({format_bytes_gb(info.duplicate_size_bytes)})",
+        "--- 去重結果 ---",
+        f"精確去重: {info.exact_duplicate_count} 個 ({format_bytes_gb(info.exact_duplicate_size_bytes)})",
+        f"相似去重: {info.visual_duplicate_count} 個 ({format_bytes_gb(info.visual_duplicate_size_bytes)})",
         "",
         "--- 行動計畫 ---",
     ]
@@ -100,7 +103,11 @@ def build_summary_text(info: SummaryInfo) -> str:
     if info.cross_drive_copy:
         lines.append("警告: cross_drive_copy=true（跨磁碟操作將以 copy 方式進行，來源保留不動）")
 
-    saved_bytes = info.thumbnail_size_bytes + info.duplicate_size_bytes
+    saved_bytes = (
+        info.thumbnail_size_bytes
+        + info.exact_duplicate_size_bytes
+        + info.visual_duplicate_size_bytes
+    )
     lines.extend(
         [
             "",
@@ -128,8 +135,10 @@ def build_summary_info(
     thumbnail_size_bytes: int,
     keeper_count: int,
     keeper_size_bytes: int,
-    duplicate_count: int = 0,
-    duplicate_size_bytes: int = 0,
+    exact_duplicate_count: int = 0,
+    exact_duplicate_size_bytes: int = 0,
+    visual_duplicate_count: int = 0,
+    visual_duplicate_size_bytes: int = 0,
     planned_thumbnail_move_count: int = 0,
     planned_duplicate_move_count: int = 0,
     cross_drive_copy: bool,
@@ -148,8 +157,10 @@ def build_summary_info(
         thumbnail_size_bytes=thumbnail_size_bytes,
         keeper_count=keeper_count,
         keeper_size_bytes=keeper_size_bytes,
-        duplicate_count=duplicate_count,
-        duplicate_size_bytes=duplicate_size_bytes,
+        exact_duplicate_count=exact_duplicate_count,
+        exact_duplicate_size_bytes=exact_duplicate_size_bytes,
+        visual_duplicate_count=visual_duplicate_count,
+        visual_duplicate_size_bytes=visual_duplicate_size_bytes,
         planned_thumbnail_move_count=planned_thumbnail_move_count,
         planned_duplicate_move_count=planned_duplicate_move_count,
         cross_drive_copy=cross_drive_copy,
