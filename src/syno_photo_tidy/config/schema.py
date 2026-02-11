@@ -46,11 +46,28 @@ def validate_config(config: dict[str, Any]) -> list[str]:
         add_error("thumbnail.min_dimension_px", "必須是正整數")
 
     rename = config.get("rename", {})
+    enabled = rename.get("enabled", True)
     pattern = rename.get("pattern")
     sequence_digits = rename.get("sequence_digits")
+    if not isinstance(enabled, bool):
+        add_error("rename.enabled", "必須是布林值")
     if not isinstance(pattern, str) or not pattern.strip():
         add_error("rename.pattern", "必須是非空字串")
     if not isinstance(sequence_digits, int) or sequence_digits <= 0:
         add_error("rename.sequence_digits", "必須是正整數")
+
+    archive = config.get("archive", {})
+    archive_enabled = archive.get("enabled", True)
+    root_folder = archive.get("root_folder")
+    unknown_folder = archive.get("unknown_folder")
+    archive_sequence_digits = archive.get("sequence_digits")
+    if not isinstance(archive_enabled, bool):
+        add_error("archive.enabled", "必須是布林值")
+    if not isinstance(root_folder, str) or not root_folder.strip():
+        add_error("archive.root_folder", "必須是非空字串")
+    if not isinstance(unknown_folder, str) or not unknown_folder.strip():
+        add_error("archive.unknown_folder", "必須是非空字串")
+    if not isinstance(archive_sequence_digits, int) or archive_sequence_digits <= 0:
+        add_error("archive.sequence_digits", "必須是正整數")
 
     return errors

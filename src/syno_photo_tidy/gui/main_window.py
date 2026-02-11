@@ -6,16 +6,19 @@ import queue
 import threading
 import tkinter as tk
 from tkinter import ttk
+from dataclasses import replace
 from pathlib import Path
 from typing import Optional
 
 from ..config import ConfigManager
 from ..core import (
     ActionPlanner,
+    Archiver,
     ExactDeduper,
     FileScanner,
     ManifestContext,
     PlanExecutor,
+    Renamer,
     ThumbnailDetector,
     VisualDeduper,
     append_manifest_entries,
@@ -37,6 +40,8 @@ class MainWindow:
         self.exact_deduper = ExactDeduper(self.config, self.logger)
         self.visual_deduper = VisualDeduper(self.config, self.logger)
         self.action_planner = ActionPlanner(self.config, self.logger)
+        self.renamer = Renamer(self.config, self.logger)
+        self.archiver = Archiver(self.config, self.logger)
         self.executor = PlanExecutor(self.logger)
         self.root = tk.Tk()
         self.root.title("syno-photo-tidy")
@@ -176,6 +181,33 @@ class MainWindow:
             }
         )
 
+        self.queue.put({"type": "stage", "message": "階段: Renaming..."})
+        rename_result = self.renamer.generate_plan(keepers)
+        self.queue.put(
+            {
+                "type": "log",
+                "message": f"計畫重新命名 {len(rename_result.plan)} 個檔案",
+            }
+        )
+
+        rename_map = {
+            item.src_path: item.dst_path
+            for item in rename_result.plan
+            if item.dst_path is not None
+        }
+        renamed_keepers = [
+            replace(item, path=rename_map.get(item.path, item.path)) for item in keepers
+        ]
+
+        self.queue.put({"type": "stage", "message": "階段: Archiving..."})
+        archive_result = self.archiver.generate_plan(renamed_keepers, output_root)
+        self.queue.put(
+            {
+                "type": "log",
+                "message": f"計畫封存 {len(archive_result.plan)} 個檔案",
+            }
+        )
+
         output_value = self.output_selector.path_var.get().strip()
         if output_value:
             output_root = Path(output_value)
@@ -195,7 +227,8 @@ class MainWindow:
             duplicates_with_reason=duplicates_with_reason,
         )
 
-        no_changes = self.action_planner.is_no_changes_needed(plan_result.plan)
+        full_plan = rename_result.plan + archive_result.plan + plan_result.plan
+        no_changes = self.action_planner.is_no_changes_needed(full_plan)
         if no_changes:
             self.queue.put({"type": "log", "message": "No changes needed"})
 
@@ -238,9 +271,14 @@ class MainWindow:
             source_dir=source_path,
             output_dir=output_root,
         )
+        rename_entries = self.action_planner.build_manifest_entries(rename_result.plan, keepers)
+        archive_entries = self.action_planner.build_manifest_entries(
+            archive_result.plan,
+            renamed_keepers,
+        )
         reporting.write_manifest(
             report_dir,
-            plan_result.manifest_entries,
+            rename_entries + archive_entries + plan_result.manifest_entries,
             context=manifest_context,
         )
 
@@ -249,7 +287,7 @@ class MainWindow:
         self.queue.put({"type": "enable_execute", "value": not no_changes})
         self.queue.put({"type": "done"})
 
-        self._last_plan = plan_result.plan
+        self._last_plan = full_plan
         self._last_report_dir = report_dir
 
     def _on_execute(self) -> None:

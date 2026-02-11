@@ -1,6 +1,7 @@
 """核心流程模組。"""
 
 from .action_planner import ActionPlanner
+from .archiver import Archiver
 from .exact_deduper import ExactDeduper
 from .executor import PlanExecutor
 from .manifest import (
@@ -16,6 +17,7 @@ from .visual_deduper import VisualDeduper
 
 __all__ = [
     "ActionPlanner",
+    "Archiver",
     "ExactDeduper",
     "FileScanner",
     "PlanExecutor",

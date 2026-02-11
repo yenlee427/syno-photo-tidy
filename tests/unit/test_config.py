@@ -6,6 +6,8 @@ def test_config_load_defaults() -> None:
     assert config.get("phash.threshold") == 8
     assert config.get("thumbnail.max_size_kb") == 120
     assert config.get("rename.pattern") == "{date}_{time}"
+    assert config.get("rename.enabled") is True
+    assert config.get("archive.enabled") is True
 
 
 def test_config_validation() -> None:

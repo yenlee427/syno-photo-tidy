@@ -9,7 +9,14 @@ DEFAULT_CONFIG = {
         "threshold": 8,
     },
     "rename": {
+        "enabled": True,
         "pattern": "{date}_{time}",
+        "sequence_digits": 3,
+    },
+    "archive": {
+        "enabled": True,
+        "root_folder": "KEEP",
+        "unknown_folder": "unknown",
         "sequence_digits": 3,
     },
     "thumbnail": {

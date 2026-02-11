@@ -59,22 +59,7 @@ class ActionPlanner:
                 )
             )
 
-        manifest_entries = [
-            ManifestEntry(
-                action=entry.action,
-                src_path=str(entry.src_path),
-                dst_path=str(entry.dst_path) if entry.dst_path else None,
-                status="PLANNED",
-                reason=entry.reason,
-                size_bytes=file_info.size_bytes,
-                resolution=file_info.resolution,
-                hash_md5=file_info.hash_md5,
-                hash_sha256=file_info.hash_sha256,
-                timestamp_locked=file_info.timestamp_locked,
-                timestamp_source=file_info.timestamp_source,
-            )
-            for entry, file_info in self._attach_file_info(plan, thumbnails, duplicates)
-        ]
+        manifest_entries = self.build_manifest_entries(plan, thumbnails + duplicates)
 
         return PlanResult(plan=plan, manifest_entries=manifest_entries)
 
@@ -99,17 +84,28 @@ class ActionPlanner:
             relative = Path(src_path.name)
         return output_root / "TO_DELETE" / "DUPLICATES" / relative
 
-    def _attach_file_info(
+    def build_manifest_entries(
         self,
         plan: list[ActionItem],
-        thumbnails: list[FileInfo],
-        duplicates: list[FileInfo],
-    ) -> list[tuple[ActionItem, FileInfo]]:
-        lookup = {item.path: item for item in thumbnails + duplicates}
-        paired: list[tuple[ActionItem, FileInfo]] = []
+        file_infos: list[FileInfo],
+    ) -> list[ManifestEntry]:
+        lookup = {item.path: item for item in file_infos}
+        entries: list[ManifestEntry] = []
         for entry in plan:
             file_info = lookup.get(entry.src_path)
-            if file_info is None:
-                continue
-            paired.append((entry, file_info))
-        return paired
+            entries.append(
+                ManifestEntry(
+                    action=entry.action,
+                    src_path=str(entry.src_path),
+                    dst_path=str(entry.dst_path) if entry.dst_path else None,
+                    status="PLANNED",
+                    reason=entry.reason,
+                    size_bytes=file_info.size_bytes if file_info else None,
+                    resolution=file_info.resolution if file_info else None,
+                    hash_md5=file_info.hash_md5 if file_info else None,
+                    hash_sha256=file_info.hash_sha256 if file_info else None,
+                    timestamp_locked=file_info.timestamp_locked if file_info else None,
+                    timestamp_source=file_info.timestamp_source if file_info else None,
+                )
+            )
+        return entries
