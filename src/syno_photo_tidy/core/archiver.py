@@ -42,7 +42,7 @@ class Archiver:
                 continue
             plan.append(
                 ActionItem(
-                    action="MOVE",
+                    action="ARCHIVE",
                     reason="ARCHIVE",
                     src_path=item.path,
                     dst_path=target,

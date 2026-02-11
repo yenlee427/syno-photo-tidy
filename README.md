@@ -33,9 +33,9 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 - 相似去重（pHash）
 - 報告分開統計精確/相似重複
 
-## v0.5 規劃中
-- Synology Photos 風格重新命名
-- 年/月封存歸檔
+## v0.5 進行中
+- Synology Photos 風格重新命名（規則與執行接線）
+- 年/月封存歸檔（規則與執行接線）
 
 ## 安全規範（不可違反）
 - 程式**不得**呼叫 delete/unlink/rmtree，且不提供刪除 UI/CLI。

@@ -553,10 +553,10 @@ syno-photo-tidy/
 ### PR #11: 重新命名 (2天)
 
 **工作內容**：
-- [ ] 實作 `core/renamer.py` - Synology Photos 命名規則。
-- [ ] 新增模式與設定（命名格式、衝突處理）。
-- [ ] manifest 記錄 action=RENAME。
-- [ ] 單元測試：`test_renamer.py`。
+- [x] 實作 `core/renamer.py` - Synology Photos 命名規則。
+- [x] 新增模式與設定（命名格式、衝突處理）。
+- [x] manifest 記錄 action=RENAME。
+- [x] 單元測試：`test_renamer.py`。
 
 **驗收標準**：
 - 依規則產生可回滾的 rename 計畫。
@@ -568,10 +568,10 @@ syno-photo-tidy/
 ### PR #12: 年/月封存歸檔 (2天)
 
 **工作內容**：
-- [ ] 實作 `core/archiver.py` - 年/月目錄規則。
-- [ ] 整合到 pipeline（在 rename 之後）。
-- [ ] manifest 記錄 action=ARCHIVE。
-- [ ] 單元測試：`test_archiver.py`。
+- [x] 實作 `core/archiver.py` - 年/月目錄規則。
+- [x] 整合到 GUI/pipeline（在 rename 之後）。
+- [x] manifest 記錄 action=ARCHIVE。
+- [x] 單元測試：`test_archiver.py`。
 
 **驗收標準**：
 - 依時間戳將檔案歸檔到年/月目錄。

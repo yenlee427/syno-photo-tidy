@@ -34,3 +34,19 @@ def test_execute_plan_renames_file(tmp_path: Path) -> None:
     assert len(result.executed_entries) == 1
     assert result.executed_entries[0].status == "RENAMED"
     assert dst.exists()
+
+
+def test_execute_plan_archives_file(tmp_path: Path) -> None:
+    src = tmp_path / "source.txt"
+    dst = tmp_path / "dest" / "archived.txt"
+    src.write_text("data", encoding="utf-8")
+
+    plan = [ActionItem(action="ARCHIVE", reason="ARCHIVE", src_path=src, dst_path=dst)]
+    executor = PlanExecutor()
+
+    result = executor.execute_plan(plan)
+
+    assert result.cancelled is False
+    assert len(result.executed_entries) == 1
+    assert result.executed_entries[0].status in {"MOVED", "COPIED"}
+    assert dst.exists()

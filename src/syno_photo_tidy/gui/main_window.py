@@ -51,6 +51,7 @@ class MainWindow:
         self.cancel_event = threading.Event()
         self._is_running = False
         self._last_plan = []
+        self._last_plan_groups: list[tuple[str, list]] = []
         self._last_report_dir: Optional[Path] = None
 
         self._build_layout()
@@ -288,6 +289,11 @@ class MainWindow:
         self.queue.put({"type": "done"})
 
         self._last_plan = full_plan
+        self._last_plan_groups = [
+            ("Renaming", rename_result.plan),
+            ("Archiving", archive_result.plan),
+            ("Moving", plan_result.plan),
+        ]
         self._last_report_dir = report_dir
 
     def _on_execute(self) -> None:
@@ -307,20 +313,32 @@ class MainWindow:
         worker.start()
 
     def _run_execute(self) -> None:
-        self.queue.put({"type": "stage", "message": "階段: Executing..."})
-        result = self.executor.execute_plan(self._last_plan, cancel_event=self.cancel_event)
-        entries = result.executed_entries + result.failed_entries
+        executed_entries = []
+        failed_entries = []
+        cancelled = False
+        for label, plan in self._last_plan_groups:
+            if not plan:
+                continue
+            self.queue.put({"type": "stage", "message": f"階段: {label}..."})
+            result = self.executor.execute_plan(plan, cancel_event=self.cancel_event)
+            executed_entries.extend(result.executed_entries)
+            failed_entries.extend(result.failed_entries)
+            if result.cancelled:
+                cancelled = True
+                break
+
+        entries = executed_entries + failed_entries
         if self._last_report_dir is not None and entries:
             manifest_path = self._last_report_dir / "manifest.jsonl"
             append_manifest_entries(manifest_path, entries, logger=self.logger)
 
-        if result.cancelled:
+        if cancelled:
             self.queue.put({"type": "log", "message": "已取消執行"})
         else:
             self.queue.put(
                 {
                     "type": "log",
-                    "message": f"執行完成：成功 {len(result.executed_entries)}，失敗 {len(result.failed_entries)}",
+                    "message": f"執行完成：成功 {len(executed_entries)}，失敗 {len(failed_entries)}",
                 }
             )
 

@@ -50,7 +50,7 @@ class PlanExecutor:
         )
 
     def _execute_action(self, item: ActionItem) -> ManifestEntry:
-        if item.action == "MOVE" and item.dst_path is not None:
+        if item.action in {"MOVE", "ARCHIVE"} and item.dst_path is not None:
             return self._execute_move(item)
         if item.action == "RENAME" and item.dst_path is not None:
             return self._execute_rename(item)
