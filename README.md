@@ -3,91 +3,66 @@
 A Windows photo organizer that **never deletes files**. It isolates recovered thumbnails, deduplicates photos (exact hash + perceptual hash), keeps only the highest-resolution version per duplicate group, and moves everything else into a `TO_DELETE` folder. Optional features include Synology Photos–style renaming and year/month archiving. Every run generates a `manifest.json` to support full rollback (undo).
 
 ## Key Features
-- **Folder picker GUI (Windows)**
-- **Dry-run preview** (no file changes) with summary statistics
-- **Thumbnail isolation** (small file + low resolution rules)
-- **Deduplication**
-  - Exact duplicates via file hash (MD5/SHA)
-  - Near-duplicates via perceptual hash (pHash)
-- **Keep only the best version**
-  - Prefer highest resolution (`width * height`)
-  - Tie-breakers: larger file size, richer EXIF metadata
-- **Safe operations**
-  - **Move only, no delete**
-  - `manifest.json` generated every run for rollback (undo)
-- **Synology-style renaming (optional)**
-  - `IMG_yyyyMMdd_HHmmss(_###).ext`
-  - Timestamp source order: EXIF → file creation time → original name + sequence
-- **Archiving (optional)**
-  - Move kept photos into `YYYY/` or `YYYY-MM/` subfolders
+# syno-photo-tidy
 
-## Safety Guarantees (Non-negotiables)
-- The tool **never deletes** files.
-- All removals are implemented as **moves** into `TO_DELETE/`.
-- Every operation writes a `REPORT/manifest.json` for rollback.
-- A **dry-run** is available before any file operations.
+一個以 Windows 為主的相片整理工具，核心原則是**永不刪除檔案**。透過乾跑（dry-run）與完整報告，先安全預覽，再進行後續操作。
 
-## Output Folder Structure
-After running, the tool creates an output root folder (example: `Processed_20260210_093000/`):
+## v0.1 特色（目前進度）
+- 設定管理骨架（預設值、驗證）
+- 排除掃描規則（含 `Processed_*`、`KEEP/`、`TO_DELETE/`、`REPORT/`、`ROLLBACK_*`）
+- 縮圖判定函式（規則 A/B）
+- 基礎資料模型（FileInfo / ActionItem / ProcessError / ManifestEntry）
+- 錯誤收集器（ErrorHandler）
+- GUI 主框架（Tkinter 介面、背景執行緒骨架、進度條與日誌區）
+- 檔案掃描引擎（metadata 收集、EXIF/解析度讀取、時間戳鎖定）
+- 縮圖偵測整合與 dry-run 報告（summary.txt、manifest.jsonl）
+- 最小可執行入口：`python -m syno_photo_tidy`
+- 基礎單元測試（排除規則、縮圖判定、設定驗證、資料模型）
 
-- `KEEP/`  
-  - (optional) `YYYY/` or `YYYY-MM/` subfolders
-- `TO_DELETE/`
-  - `THUMBNAILS/`
-  - `DUPLICATES_EXACT/`
-  - `DUPLICATES_SIMILAR/`
-- `REPORT/`
-  - `manifest.json`
-  - `report.csv`
-  - `summary.txt`
-  - `error.log`
+## 安全規範（不可違反）
+- 程式**不得**呼叫 delete/unlink/rmtree，且不提供刪除 UI/CLI。
+- 同磁碟搬移：使用 `shutil.move`。
+- 跨磁碟：使用 `shutil.copy2` 且**來源保留不動**，並在 summary 明確警告 `cross_drive_copy=true`。
+- Scan 必須排除：`Processed_*`、`KEEP/`、`TO_DELETE/`、`REPORT/`、`ROLLBACK_TRASH/`、`ROLLBACK_CONFLICTS/`；遇到 symlink/junction 一律跳過並記錄 `SKIPPED_SYMLINK`。
+- 若 action plan 為空：顯示 `No changes needed`，只輸出報告，不做任何 move/rename。
+- 所有 planned actions 與 execute 結果都要寫入 `manifest.jsonl`（支援 `.partial` 中斷恢復骨架）。
 
-## How It Works (Pipeline)
-1. Scan folder and collect metadata (size, resolution, EXIF timestamp if available)
-2. Isolate thumbnails → move candidates to `TO_DELETE/THUMBNAILS/`
-3. Exact dedupe (hash) → keep one, move the rest to `TO_DELETE/DUPLICATES_EXACT/`
-4. Near-dedupe (pHash) → cluster similar images, keep best resolution, move the rest to `TO_DELETE/DUPLICATES_SIMILAR/`
-5. Optional rename (Synology format) on **kept** files
-6. Optional archive into year/month subfolders
-7. Generate reports + manifest for rollback
+## 安裝與執行（v0.1）
+1. 建立虛擬環境並安裝依賴：
+   ```bash
+   python -m venv venv
+   venv\Scripts\activate
+   pip install -r requirements.txt -r requirements-dev.txt
+   ```
+2. 安裝本專案（可編輯模式）：
+   ```bash
+   pip install -e .
+   ```
+3. 執行最小入口：
+   ```bash
+   python -m syno_photo_tidy
+   ```
+4. 執行測試：
+   ```bash
+   pytest
+   ```
 
-## Configuration
-The tool reads a config file (planned): `config.json`
+## 設定檔
+- 預設設定：`config/default_config.json`
+- 目前提供欄位：
+  - `phash.threshold`
+  - `thumbnail.max_size_kb`
+  - `thumbnail.max_dimension_px`
+  - `thumbnail.min_dimension_px`
 
-Example fields (planned):
-- Thumbnail rules:
+## v0.1 限制
+- 目前已完成 PR #1～PR #5，尚未提供實際搬移與回滾執行。
+- 之後會依照 `docs/execution-plan.md` 依序完成 PR #2～PR #5。
+
+## 開發路線（對照 execution-plan）
+- PR #1：專案初始化與設定系統
+- PR #2：基礎資料模型
+- PR #3：GUI 主框架
+- PR #4：檔案掃描引擎
+- PR #5：縮圖偵測與 dry-run
   - `max_file_kb`
-  - `max_long_edge_px`
-- pHash:
-  - `phash_distance_threshold`
-- Rename:
-  - `enable_rename`
-  - `collision_suffix_digits`
-- Archive:
-  - `enable_archive`
-  - `mode`: `year` or `month`
-- Time source:
-  - `timestamp_priority`: `exif` → `created_time` → `fallback`
-
-## Rollback (Undo)
-- Use `REPORT/manifest.json` from the last run to move files back to their original paths.
-- If a destination path is occupied, the tool should place files into a safe fallback folder and report conflicts in `error.log`.
-
-## Roadmap
-- v0.1: Tkinter GUI + dry-run scan + thumbnail isolation
-- v0.2: Exact dedupe (hash) + reporting
-- v0.3: pHash clustering + keep-best-resolution policy
-- v0.4: Move executor + manifest rollback
-- v0.5: Synology renaming + year/month archiving
-- v1.0: Packaging (Windows executable) + improved UI
-
-## License
-Choose a license (MIT recommended for personal utilities).
-
-## GUI Options
-- ✅ Dry-run preview (default ON for preview step)
-- ✅ Enable renaming (default OFF)
-  - When enabled, renaming applies **only** to files moved into `KEEP/`
-  - Format: `IMG_yyyyMMdd_HHmmss(_###).ext`
-- ✅ Enable archiving (default OFF)
-  - Archive mode: `year` or `month`

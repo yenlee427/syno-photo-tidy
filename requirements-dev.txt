@@ -1,0 +1,9 @@
+# 測試框架
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.0
+
+# 程式碼品質
+black>=23.0.0
+mypy>=1.5.0
+flake8>=6.0.0
