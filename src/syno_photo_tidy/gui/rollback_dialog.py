@@ -58,6 +58,10 @@ class RollbackDialog(tk.Toplevel):
     def _build_summary(self, processed_dir: Path) -> str:
         manifest_path = processed_dir / "REPORT" / "manifest.jsonl"
         records = read_manifest_records(manifest_path)
+        run_record = next(
+            (record for record in records if record.get("record_type") == "RUN"),
+            None,
+        )
         actions = [
             record
             for record in records
@@ -66,7 +70,17 @@ class RollbackDialog(tk.Toplevel):
         ]
         if not actions:
             return "找不到可回滾的記錄"
-        return f"可回滾記錄: {len(actions)}"
+        counts = {"MOVED": 0, "COPIED": 0, "RENAMED": 0}
+        for record in actions:
+            status = str(record.get("status"))
+            if status in counts:
+                counts[status] += 1
+        created_at = run_record.get("created_at") if run_record else "未知"
+        return (
+            f"Run: {created_at}\n"
+            f"可回滾記錄: {len(actions)} "
+            f"(MOVED {counts['MOVED']}, COPIED {counts['COPIED']}, RENAMED {counts['RENAMED']})"
+        )
 
     def _on_confirm(self) -> None:
         index = self._get_selected_index()
