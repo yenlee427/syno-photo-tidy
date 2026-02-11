@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
 from ..config import ConfigManager
+from .config_dialog import ConfigDialog
 
 
 class SettingsPanel(ttk.Frame):
@@ -25,6 +26,8 @@ class SettingsPanel(ttk.Frame):
     def _build_body(self) -> None:
         max_size = self.config.get("thumbnail.max_size_kb")
         max_dimension = self.config.get("thumbnail.max_dimension_px")
+        min_dimension = self.config.get("thumbnail.min_dimension_px")
+        phash_threshold = self.config.get("phash.threshold")
 
         size_frame = ttk.Frame(self.body)
         size_frame.pack(fill=tk.X, pady=(0, 6))
@@ -44,6 +47,32 @@ class SettingsPanel(ttk.Frame):
         )
         ttk.Label(dimension_frame, text="px").pack(side=tk.LEFT)
 
+        min_dimension_frame = ttk.Frame(self.body)
+        min_dimension_frame.pack(fill=tk.X, pady=(6, 0))
+        ttk.Label(min_dimension_frame, text="極小圖").pack(side=tk.LEFT)
+        self.min_dimension_var = tk.StringVar(value=str(min_dimension))
+        ttk.Entry(min_dimension_frame, textvariable=self.min_dimension_var, width=8).pack(
+            side=tk.LEFT, padx=(6, 2)
+        )
+        ttk.Label(min_dimension_frame, text="px").pack(side=tk.LEFT)
+
+        phash_frame = ttk.Frame(self.body)
+        phash_frame.pack(fill=tk.X, pady=(6, 0))
+        ttk.Label(phash_frame, text="相似門檻").pack(side=tk.LEFT)
+        self.phash_threshold_var = tk.StringVar(value=str(phash_threshold))
+        ttk.Entry(phash_frame, textvariable=self.phash_threshold_var, width=8).pack(
+            side=tk.LEFT, padx=(6, 2)
+        )
+
+        button_frame = ttk.Frame(self.body)
+        button_frame.pack(fill=tk.X, pady=(8, 0))
+        ttk.Button(button_frame, text="設定檔編輯", command=self._open_config_dialog).pack(
+            side=tk.LEFT
+        )
+        ttk.Button(button_frame, text="套用設定", command=self._apply_settings).pack(
+            side=tk.RIGHT
+        )
+
     def _toggle(self) -> None:
         if self._is_open.get():
             self.body.pack_forget()
@@ -53,3 +82,27 @@ class SettingsPanel(ttk.Frame):
             self.body.pack(fill=tk.X, pady=(6, 0))
             self.toggle_button.configure(text="進階設定 ▲")
             self._is_open.set(True)
+
+    def _apply_settings(self) -> None:
+        try:
+            max_size = int(self.max_size_var.get())
+            max_dimension = int(self.max_dimension_var.get())
+            min_dimension = int(self.min_dimension_var.get())
+            phash_threshold = int(self.phash_threshold_var.get())
+        except ValueError:
+            messagebox.showerror("設定", "請輸入有效的整數")
+            return
+
+        self.config.set("thumbnail.max_size_kb", max_size)
+        self.config.set("thumbnail.max_dimension_px", max_dimension)
+        self.config.set("thumbnail.min_dimension_px", min_dimension)
+        self.config.set("phash.threshold", phash_threshold)
+
+        errors = self.config.validate_config()
+        if errors:
+            messagebox.showwarning("設定", "\n".join(errors))
+        else:
+            messagebox.showinfo("設定", "設定已套用")
+
+    def _open_config_dialog(self) -> None:
+        ConfigDialog(self, self.config)

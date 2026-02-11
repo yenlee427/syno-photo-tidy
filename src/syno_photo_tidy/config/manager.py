@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 from typing import Any, Optional
@@ -79,6 +80,17 @@ class ConfigManager:
 
     def validate_config(self) -> list[str]:
         return validate_config(self._config)
+
+    def validate_dict(self, config_dict: dict[str, Any]) -> list[str]:
+        return validate_config(config_dict)
+
+    def replace_config(self, config_dict: dict[str, Any]) -> None:
+        self._user = copy.deepcopy(config_dict)
+        self._runtime = {}
+        self._config = _deep_merge(self._defaults, self._user)
+
+    def to_dict(self) -> dict[str, Any]:
+        return copy.deepcopy(self._config)
 
     def save_user_config(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
