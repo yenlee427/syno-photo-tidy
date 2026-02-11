@@ -27,3 +27,15 @@ def test_move_or_copy_copy(tmp_path: Path) -> None:
     assert dst.exists()
     assert src.exists()
     assert dst.read_text(encoding="utf-8") == "hello"
+
+
+def test_rename_file(tmp_path: Path) -> None:
+    src = tmp_path / "source.txt"
+    dst = tmp_path / "renamed.txt"
+    src.write_text("hello", encoding="utf-8")
+
+    result = file_ops.rename_file(src, dst)
+
+    assert result == "RENAMED"
+    assert dst.exists()
+    assert not src.exists()

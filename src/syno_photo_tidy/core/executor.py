@@ -38,7 +38,7 @@ class PlanExecutor:
                 break
 
             entry = self._execute_action(item)
-            if entry.status in {"MOVED", "COPIED"}:
+            if entry.status in {"MOVED", "COPIED", "RENAMED"}:
                 executed.append(entry)
             else:
                 failed.append(entry)
@@ -50,17 +50,22 @@ class PlanExecutor:
         )
 
     def _execute_action(self, item: ActionItem) -> ManifestEntry:
-        if item.action != "MOVE" or item.dst_path is None:
-            return ManifestEntry(
-                action=item.action,
-                src_path=str(item.src_path),
-                dst_path=str(item.dst_path) if item.dst_path else None,
-                status="ERROR",
-                reason=item.reason,
-                error_code="E-UNSUPPORTED",
-                error_message="Unsupported action",
-            )
+        if item.action == "MOVE" and item.dst_path is not None:
+            return self._execute_move(item)
+        if item.action == "RENAME" and item.dst_path is not None:
+            return self._execute_rename(item)
 
+        return ManifestEntry(
+            action=item.action,
+            src_path=str(item.src_path),
+            dst_path=str(item.dst_path) if item.dst_path else None,
+            status="ERROR",
+            reason=item.reason,
+            error_code="E-UNSUPPORTED",
+            error_message="Unsupported action",
+        )
+
+    def _execute_move(self, item: ActionItem) -> ManifestEntry:
         size_bytes = _get_size_bytes(item.src_path)
         try:
             cross_drive_copy = path_utils.is_cross_drive(item.src_path, item.dst_path)
@@ -88,6 +93,32 @@ class PlanExecutor:
                 status="ERROR",
                 reason=item.reason,
                 error_code="E-EXECUTE",
+                error_message=str(exc),
+                size_bytes=size_bytes,
+            )
+
+    def _execute_rename(self, item: ActionItem) -> ManifestEntry:
+        size_bytes = _get_size_bytes(item.src_path)
+        try:
+            if path_utils.is_cross_drive(item.src_path, item.dst_path):
+                raise ValueError("Rename cannot cross drives")
+            status = file_ops.rename_file(item.src_path, item.dst_path, logger=self.logger)
+            return ManifestEntry(
+                action=item.action,
+                src_path=str(item.src_path),
+                dst_path=str(item.dst_path),
+                status=status,
+                reason=item.reason,
+                size_bytes=size_bytes,
+            )
+        except Exception as exc:  # noqa: BLE001 - record failure for manifest
+            return ManifestEntry(
+                action=item.action,
+                src_path=str(item.src_path),
+                dst_path=str(item.dst_path),
+                status="ERROR",
+                reason=item.reason,
+                error_code="E-RENAME",
                 error_message=str(exc),
                 size_bytes=size_bytes,
             )

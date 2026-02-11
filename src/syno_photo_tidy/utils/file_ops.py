@@ -28,3 +28,15 @@ def move_or_copy(
     shutil.move(src_path, dst_path)
     logger.info(f"MOVED: {src_path} -> {dst_path}")
     return "MOVED"
+
+
+def rename_file(src_path: Path, dst_path: Path, logger=None) -> str:
+    logger = logger or get_logger("FileOps")
+    if dst_path.exists():
+        raise FileExistsError(f"Destination already exists: {dst_path}")
+    if src_path.parent != dst_path.parent:
+        raise ValueError("Rename must stay in the same directory")
+
+    src_path.rename(dst_path)
+    logger.info(f"RENAMED: {src_path} -> {dst_path}")
+    return "RENAMED"

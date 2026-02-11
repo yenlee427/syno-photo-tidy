@@ -8,6 +8,10 @@ DEFAULT_CONFIG = {
     "phash": {
         "threshold": 8,
     },
+    "rename": {
+        "pattern": "{date}_{time}",
+        "sequence_digits": 3,
+    },
     "thumbnail": {
         "max_size_kb": 120,
         "max_dimension_px": 640,

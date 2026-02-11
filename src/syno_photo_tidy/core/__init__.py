@@ -9,6 +9,7 @@ from .manifest import (
     append_manifest_entries,
     read_manifest_records,
 )
+from .renamer import Renamer
 from .scanner import FileScanner
 from .thumbnail_detector import ThumbnailDetector
 from .visual_deduper import VisualDeduper
@@ -21,6 +22,7 @@ __all__ = [
     "ManifestContext",
     "ManifestWriter",
     "append_manifest_entries",
+    "Renamer",
     "ThumbnailDetector",
     "VisualDeduper",
     "read_manifest_records",

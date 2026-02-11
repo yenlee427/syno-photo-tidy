@@ -45,4 +45,12 @@ def validate_config(config: dict[str, Any]) -> list[str]:
     if not isinstance(min_dimension_px, int) or min_dimension_px <= 0:
         add_error("thumbnail.min_dimension_px", "必須是正整數")
 
+    rename = config.get("rename", {})
+    pattern = rename.get("pattern")
+    sequence_digits = rename.get("sequence_digits")
+    if not isinstance(pattern, str) or not pattern.strip():
+        add_error("rename.pattern", "必須是非空字串")
+    if not isinstance(sequence_digits, int) or sequence_digits <= 0:
+        add_error("rename.sequence_digits", "必須是正整數")
+
     return errors
