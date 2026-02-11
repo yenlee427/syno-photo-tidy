@@ -33,9 +33,12 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 - 相似去重（pHash）
 - 報告分開統計精確/相似重複
 
-## v0.5 進行中
+## v0.5 已完成
 - Synology Photos 風格重新命名（規則與執行接線）
 - 年/月封存歸檔（規則與執行接線）
+
+## v0.6 進行中
+- Rollback Last Run（依 manifest 回滾）
 
 ## 安全規範（不可違反）
 - 程式**不得**呼叫 delete/unlink/rmtree，且不提供刪除 UI/CLI。
@@ -45,7 +48,7 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 - 若 action plan 為空：顯示 `No changes needed`，只輸出報告，不做任何 move/rename。
 - 所有 planned actions 與 execute 結果都要寫入 `manifest.jsonl`（支援 `.partial` 中斷恢復骨架）。
 
-## 安裝與執行（v0.4）
+## 安裝與執行（v0.6）
 1. 建立虛擬環境並安裝依賴：
    ```bash
    python -m venv venv
@@ -89,4 +92,5 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 - PR #10：相似去重（pHash）
 - PR #11：重新命名（Synology Photos 風格）
 - PR #12：年/月封存歸檔
+- PR #13：回滾引擎（Rollback Last Run）
   - `max_file_kb`

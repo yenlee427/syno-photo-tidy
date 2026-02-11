@@ -578,6 +578,35 @@ syno-photo-tidy/
 - 跨磁碟遵循 copy 規則。
 - 測試通過。
 
+---
+
+## v0.6 目標
+
+新增功能與改進：
+1. **Rollback Last Run** - 依 manifest 執行回滾。
+2. **衝突處理** - 回滾遇到衝突時移入 ROLLBACK_CONFLICTS。
+
+**預計時間**：2-3 天  
+**版本號**：0.6.0
+
+---
+
+## v0.6 工作分解（按 PR 順序）
+
+### PR #13: 回滾引擎 (2天)
+
+**工作內容**：
+- [x] 實作 `core/rollback.py` - 依 manifest 回滾。
+- [x] GUI 加入 Rollback Last Run。
+- [x] manifest 追加回滾記錄。
+- [x] 單元測試：`test_rollback.py`。
+
+**驗收標準**：
+- 可選擇特定 Processed_* 目錄回滾。
+- MOVED/RENAMED 依序回滾；COPIED 移入 ROLLBACK_TRASH。
+- 衝突時移入 ROLLBACK_CONFLICTS。
+- 測試通過。
+
 **符號說明**：
 - ✅ = v0.1 實作並測試通過
 - v0.X = 後續版本實作

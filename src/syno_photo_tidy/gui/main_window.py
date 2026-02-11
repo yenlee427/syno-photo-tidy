@@ -5,7 +5,7 @@ from __future__ import annotations
 import queue
 import threading
 import tkinter as tk
-from tkinter import ttk
+from tkinter import filedialog, ttk
 from dataclasses import replace
 from pathlib import Path
 from typing import Optional
@@ -19,6 +19,7 @@ from ..core import (
     ManifestContext,
     PlanExecutor,
     Renamer,
+    RollbackRunner,
     ThumbnailDetector,
     VisualDeduper,
     append_manifest_entries,
@@ -43,6 +44,7 @@ class MainWindow:
         self.renamer = Renamer(self.config, self.logger)
         self.archiver = Archiver(self.config, self.logger)
         self.executor = PlanExecutor(self.logger)
+        self.rollback_runner = RollbackRunner(self.logger)
         self.root = tk.Tk()
         self.root.title("syno-photo-tidy")
         self.root.geometry("640x520")
@@ -91,6 +93,10 @@ class MainWindow:
             button_frame, text="Execute", state="disabled", command=self._on_execute
         )
         self.execute_button.pack(side=tk.LEFT, padx=(8, 0))
+        self.rollback_button = ttk.Button(
+            button_frame, text="Rollback Last Run", command=self._on_rollback
+        )
+        self.rollback_button.pack(side=tk.LEFT, padx=(8, 0))
 
         self.settings_panel = SettingsPanel(container, self.config)
         self.settings_panel.pack(fill=tk.X, pady=(0, 12))
@@ -312,6 +318,53 @@ class MainWindow:
         worker = threading.Thread(target=self._run_execute, daemon=True)
         worker.start()
 
+    def _on_rollback(self) -> None:
+        if self._is_running:
+            return
+        selected = filedialog.askdirectory(title="選擇要回滾的 Processed_* 資料夾")
+        if not selected:
+            return
+        processed_dir = Path(selected)
+        if not processed_dir.exists():
+            self.log_viewer.add_line("指定的資料夾不存在")
+            return
+
+        self._is_running = True
+        self.cancel_event.clear()
+        self.dry_run_button.configure(state="disabled")
+        self.execute_button.configure(state="disabled")
+        self.rollback_button.configure(state="disabled")
+        self.log_viewer.add_line("開始回滾...")
+        self.progress_bar.update_progress(0)
+        worker = threading.Thread(
+            target=self._run_rollback,
+            args=(processed_dir,),
+            daemon=True,
+        )
+        worker.start()
+
+    def _run_rollback(self, processed_dir: Path) -> None:
+        self.queue.put({"type": "stage", "message": "階段: Rolling back..."})
+        result = self.rollback_runner.rollback(processed_dir)
+        self.queue.put(
+            {
+                "type": "log",
+                "message": (
+                    "回滾完成：還原 {rolled}，移入垃圾 {trashed}，衝突 {conflicts}，"
+                    "跳過 {skipped}，失敗 {failed}"
+                ).format(
+                    rolled=len(result.rolled_back),
+                    trashed=len(result.trashed),
+                    conflicts=len(result.conflicts),
+                    skipped=len(result.skipped),
+                    failed=len(result.failed),
+                ),
+            }
+        )
+        self.queue.put({"type": "progress", "value": 100})
+        self.queue.put({"type": "stage", "message": "階段: 完成"})
+        self.queue.put({"type": "done"})
+
     def _run_execute(self) -> None:
         executed_entries = []
         failed_entries = []
@@ -364,6 +417,7 @@ class MainWindow:
                 elif item_type == "done":
                     self._is_running = False
                     self.dry_run_button.configure(state="normal")
+                    self.rollback_button.configure(state="normal")
         except queue.Empty:
             pass
         self.root.after(100, self._poll_queue)
