@@ -33,6 +33,10 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 - 相似去重（pHash）
 - 報告分開統計精確/相似重複
 
+## v0.5 規劃中
+- Synology Photos 風格重新命名
+- 年/月封存歸檔
+
 ## 安全規範（不可違反）
 - 程式**不得**呼叫 delete/unlink/rmtree，且不提供刪除 UI/CLI。
 - 同磁碟搬移：使用 `shutil.move`。
@@ -83,4 +87,6 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 - PR #8：Dry-run 報告更新
 - PR #9：執行/搬移引擎
 - PR #10：相似去重（pHash）
+- PR #11：重新命名（Synology Photos 風格）
+- PR #12：年/月封存歸檔
   - `max_file_kb`
