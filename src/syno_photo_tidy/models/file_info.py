@@ -19,6 +19,8 @@ class FileInfo:
     timestamp_locked: str
     timestamp_source: str
     scan_machine_timezone: str
+    hash_md5: Optional[str] = None
+    hash_sha256: Optional[str] = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -32,4 +34,6 @@ class FileInfo:
             "timestamp_locked": self.timestamp_locked,
             "timestamp_source": self.timestamp_source,
             "scan_machine_timezone": self.scan_machine_timezone,
+            "hash_md5": self.hash_md5,
+            "hash_sha256": self.hash_sha256,
         }

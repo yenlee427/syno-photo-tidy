@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable
 
+from ..core.manifest import ManifestContext, ManifestWriter
 from ..models import ManifestEntry
 
 
@@ -24,7 +24,10 @@ class SummaryInfo:
     thumbnail_size_bytes: int
     keeper_count: int
     keeper_size_bytes: int
-    planned_move_count: int
+    duplicate_count: int
+    duplicate_size_bytes: int
+    planned_thumbnail_move_count: int
+    planned_duplicate_move_count: int
     cross_drive_copy: bool
     no_changes_needed: bool
 
@@ -35,14 +38,23 @@ def ensure_report_dir(output_root: Path) -> Path:
     return report_dir
 
 
-def write_manifest(report_dir: Path, entries: Iterable[ManifestEntry]) -> Path:
-    manifest_path = report_dir / "manifest.jsonl"
-    partial_path = report_dir / "manifest.jsonl.partial"
-    with partial_path.open("w", encoding="utf-8") as handle:
-        for entry in entries:
-            data = entry.to_dict()
-            handle.write(json.dumps(data, ensure_ascii=True) + "\n")
-    partial_path.replace(manifest_path)
+def write_manifest(
+    report_dir: Path,
+    entries: Iterable[ManifestEntry],
+    *,
+    context: ManifestContext | None = None,
+) -> Path:
+    if context is None:
+        context = ManifestContext(
+            run_id="",
+            mode="",
+            source_dir="",
+            output_dir="",
+            created_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        )
+    with ManifestWriter(report_dir, context) as writer:
+        writer.write_entries(entries)
+        manifest_path = writer.manifest_path
     return manifest_path
 
 
@@ -69,22 +81,31 @@ def build_summary_text(info: SummaryInfo) -> str:
         f"偵測為縮圖: {info.thumbnail_count} 個 ({format_bytes_gb(info.thumbnail_size_bytes)})",
         f"保留為原圖: {info.keeper_count} 個 ({format_bytes_gb(info.keeper_size_bytes)})",
         "",
+        "--- 精確去重 ---",
+        f"偵測為重複: {info.duplicate_count} 個 ({format_bytes_gb(info.duplicate_size_bytes)})",
+        "",
         "--- 行動計畫 ---",
     ]
 
     if info.no_changes_needed:
         lines.append("No changes needed")
     else:
-        lines.append(f"移動到 TO_DELETE/THUMBNAILS/: {info.planned_move_count} 個檔案")
+        lines.append(
+            f"移動到 TO_DELETE/THUMBNAILS/: {info.planned_thumbnail_move_count} 個檔案"
+        )
+        lines.append(
+            f"移動到 TO_DELETE/DUPLICATES/: {info.planned_duplicate_move_count} 個檔案"
+        )
 
     if info.cross_drive_copy:
         lines.append("警告: cross_drive_copy=true（跨磁碟操作將以 copy 方式進行，來源保留不動）")
 
+    saved_bytes = info.thumbnail_size_bytes + info.duplicate_size_bytes
     lines.extend(
         [
             "",
             "--- 節省空間 ---",
-            f"預計釋放: {format_bytes_gb(info.thumbnail_size_bytes)}",
+            f"預計釋放: {format_bytes_gb(saved_bytes)}",
             "",
             "--- 下一步 ---",
             "此為 Dry-run，未實際移動任何檔案。",
@@ -107,7 +128,10 @@ def build_summary_info(
     thumbnail_size_bytes: int,
     keeper_count: int,
     keeper_size_bytes: int,
-    planned_move_count: int,
+    duplicate_count: int = 0,
+    duplicate_size_bytes: int = 0,
+    planned_thumbnail_move_count: int = 0,
+    planned_duplicate_move_count: int = 0,
     cross_drive_copy: bool,
     no_changes_needed: bool,
 ) -> SummaryInfo:
@@ -124,7 +148,10 @@ def build_summary_info(
         thumbnail_size_bytes=thumbnail_size_bytes,
         keeper_count=keeper_count,
         keeper_size_bytes=keeper_size_bytes,
-        planned_move_count=planned_move_count,
+        duplicate_count=duplicate_count,
+        duplicate_size_bytes=duplicate_size_bytes,
+        planned_thumbnail_move_count=planned_thumbnail_move_count,
+        planned_duplicate_move_count=planned_duplicate_move_count,
         cross_drive_copy=cross_drive_copy,
         no_changes_needed=no_changes_needed,
     )

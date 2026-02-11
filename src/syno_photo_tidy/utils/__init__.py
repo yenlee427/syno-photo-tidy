@@ -1,5 +1,5 @@
 """工具模組。"""
 
-from . import reporting
+from . import hash_calc, reporting
 
-__all__ = ["reporting"]
+__all__ = ["hash_calc", "reporting"]

@@ -9,7 +9,7 @@ from tkinter import ttk
 from pathlib import Path
 
 from ..config import ConfigManager
-from ..core import ActionPlanner, FileScanner, ThumbnailDetector
+from ..core import ActionPlanner, ExactDeduper, FileScanner, ManifestContext, ThumbnailDetector
 from ..utils import path_utils, reporting, time_utils
 from ..utils.logger import get_logger
 from .settings_panel import SettingsPanel
@@ -24,6 +24,7 @@ class MainWindow:
         self.logger = get_logger(self.__class__.__name__)
         self.scanner = FileScanner(self.config, self.logger)
         self.thumbnail_detector = ThumbnailDetector(self.config, self.logger)
+        self.exact_deduper = ExactDeduper(self.config, self.logger)
         self.action_planner = ActionPlanner(self.config, self.logger)
         self.root = tk.Tk()
         self.root.title("syno-photo-tidy")
@@ -137,6 +138,17 @@ class MainWindow:
             }
         )
 
+        self.queue.put({"type": "stage", "message": "階段: Exact hash dedupe..."})
+        dedupe_result = self.exact_deduper.dedupe(keepers)
+        keepers = dedupe_result.keepers
+        duplicates = dedupe_result.duplicates
+        self.queue.put(
+            {
+                "type": "log",
+                "message": f"偵測到 {len(duplicates)} 個重複檔案",
+            }
+        )
+
         output_value = self.output_selector.path_var.get().strip()
         if output_value:
             output_root = Path(output_value)
@@ -149,6 +161,7 @@ class MainWindow:
             thumbnails,
             source_root=source_path,
             output_root=output_root,
+            duplicates=duplicates,
         )
 
         no_changes = self.action_planner.is_no_changes_needed(plan_result.plan)
@@ -158,6 +171,7 @@ class MainWindow:
         total_size = sum(item.size_bytes for item in results)
         thumbnail_size = sum(item.size_bytes for item in thumbnails)
         keeper_size = sum(item.size_bytes for item in keepers)
+        duplicate_size = sum(item.size_bytes for item in duplicates)
         format_counts: dict[str, int] = {}
         for item in results:
             format_counts[item.ext] = format_counts.get(item.ext, 0) + 1
@@ -174,14 +188,27 @@ class MainWindow:
             thumbnail_size_bytes=thumbnail_size,
             keeper_count=len(keepers),
             keeper_size_bytes=keeper_size,
-            planned_move_count=len(plan_result.plan),
+            duplicate_count=len(duplicates),
+            duplicate_size_bytes=duplicate_size,
+            planned_thumbnail_move_count=len(thumbnails),
+            planned_duplicate_move_count=len(duplicates),
             cross_drive_copy=cross_drive_copy,
             no_changes_needed=no_changes,
         )
 
         report_dir = reporting.ensure_report_dir(output_root)
         reporting.write_summary(report_dir, summary_info)
-        reporting.write_manifest(report_dir, plan_result.manifest_entries)
+        manifest_context = ManifestContext.from_run(
+            run_id=output_root.name,
+            mode=f"{self.mode_var.get()} (Dry-run)",
+            source_dir=source_path,
+            output_dir=output_root,
+        )
+        reporting.write_manifest(
+            report_dir,
+            plan_result.manifest_entries,
+            context=manifest_context,
+        )
 
         self.queue.put({"type": "progress", "value": 100})
         self.queue.put({"type": "stage", "message": "階段: 完成"})

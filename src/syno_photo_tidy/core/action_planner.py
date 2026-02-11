@@ -28,14 +28,27 @@ class ActionPlanner:
         thumbnails: list[FileInfo],
         source_root: Path,
         output_root: Path,
+        duplicates: list[FileInfo] | None = None,
     ) -> PlanResult:
         plan: list[ActionItem] = []
+        duplicates = duplicates or []
         for item in thumbnails:
             dst_path = self._build_thumbnail_destination(item.path, source_root, output_root)
             plan.append(
                 ActionItem(
                     action="MOVE",
                     reason="THUMBNAIL",
+                    src_path=item.path,
+                    dst_path=dst_path,
+                )
+            )
+
+        for item in duplicates:
+            dst_path = self._build_duplicate_destination(item.path, source_root, output_root)
+            plan.append(
+                ActionItem(
+                    action="MOVE",
+                    reason="DUPLICATE_HASH",
                     src_path=item.path,
                     dst_path=dst_path,
                 )
@@ -48,8 +61,14 @@ class ActionPlanner:
                 dst_path=str(entry.dst_path) if entry.dst_path else None,
                 status="PLANNED",
                 reason=entry.reason,
+                size_bytes=file_info.size_bytes,
+                resolution=file_info.resolution,
+                hash_md5=file_info.hash_md5,
+                hash_sha256=file_info.hash_sha256,
+                timestamp_locked=file_info.timestamp_locked,
+                timestamp_source=file_info.timestamp_source,
             )
-            for entry in plan
+            for entry, file_info in self._attach_file_info(plan, thumbnails, duplicates)
         ]
 
         return PlanResult(plan=plan, manifest_entries=manifest_entries)
@@ -65,3 +84,27 @@ class ActionPlanner:
         except ValueError:
             relative = Path(src_path.name)
         return output_root / "TO_DELETE" / "THUMBNAILS" / relative
+
+    def _build_duplicate_destination(
+        self, src_path: Path, source_root: Path, output_root: Path
+    ) -> Path:
+        try:
+            relative = src_path.relative_to(source_root)
+        except ValueError:
+            relative = Path(src_path.name)
+        return output_root / "TO_DELETE" / "DUPLICATES" / relative
+
+    def _attach_file_info(
+        self,
+        plan: list[ActionItem],
+        thumbnails: list[FileInfo],
+        duplicates: list[FileInfo],
+    ) -> list[tuple[ActionItem, FileInfo]]:
+        lookup = {item.path: item for item in thumbnails + duplicates}
+        paired: list[tuple[ActionItem, FileInfo]] = []
+        for entry in plan:
+            file_info = lookup.get(entry.src_path)
+            if file_info is None:
+                continue
+            paired.append((entry, file_info))
+        return paired

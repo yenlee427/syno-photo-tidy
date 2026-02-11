@@ -1,6 +1,10 @@
 """預設設定值。"""
 
 DEFAULT_CONFIG = {
+    "hash": {
+        "algorithms": ["sha256", "md5"],
+        "chunk_size_kb": 1024,
+    },
     "phash": {
         "threshold": 8,
     },

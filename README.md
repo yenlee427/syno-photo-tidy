@@ -19,6 +19,11 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 - 最小可執行入口：`python -m syno_photo_tidy`
 - 基礎單元測試（排除規則、縮圖判定、設定驗證、資料模型）
 
+## v0.2 進行中
+- 精確去重（Hash: SHA256/MD5）
+- Manifest.jsonl 完整化（RUN + ACTION 記錄）
+- Dry-run 報告新增重複檔案統計
+
 ## 安全規範（不可違反）
 - 程式**不得**呼叫 delete/unlink/rmtree，且不提供刪除 UI/CLI。
 - 同磁碟搬移：使用 `shutil.move`。
