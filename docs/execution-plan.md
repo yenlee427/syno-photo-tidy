@@ -607,6 +607,34 @@ syno-photo-tidy/
 - 衝突時移入 ROLLBACK_CONFLICTS。
 - 測試通過。
 
+---
+
+## v0.7 目標
+
+新增功能與改進：
+1. **進階進度視窗** - 獨立進度/日誌視窗。
+2. **Rollback 視窗** - 選擇 Processed_* 目錄並顯示摘要。
+3. **Pipeline 協調** - 抽象化 dry-run 流程。
+
+**預計時間**：2 天  
+**版本號**：0.7.0
+
+---
+
+## v0.7 工作分解（按 PR 順序）
+
+### PR #14: 進階視窗與 Pipeline (2天)
+
+**工作內容**：
+- [x] 實作 `gui/progress_dialog.py` - 進階進度視窗。
+- [x] 實作 `gui/rollback_dialog.py` - 回滾選擇視窗。
+- [x] 實作 `core/pipeline.py` - Pipeline 協調。
+
+**驗收標準**：
+- 進度視窗可顯示階段/日誌並支援取消。
+- 回滾視窗可選擇 Processed_* 目錄並顯示摘要。
+- Pipeline 可產生完整 dry-run 計畫。
+
 **符號說明**：
 - ✅ = v0.1 實作並測試通過
 - v0.X = 後續版本實作

@@ -27,6 +27,8 @@ from ..core import (
 from ..utils import path_utils, reporting, time_utils
 from ..utils.logger import get_logger
 from .settings_panel import SettingsPanel
+from .progress_dialog import ProgressDialog
+from .rollback_dialog import RollbackDialog
 from .widgets.file_selector import FileSelector
 from .widgets.log_viewer import LogViewer
 from .widgets.progress_bar import ProgressBar
@@ -55,6 +57,7 @@ class MainWindow:
         self._last_plan = []
         self._last_plan_groups: list[tuple[str, list]] = []
         self._last_report_dir: Optional[Path] = None
+        self._progress_dialog: Optional[ProgressDialog] = None
 
         self._build_layout()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -131,6 +134,7 @@ class MainWindow:
         self._is_running = True
         self.cancel_event.clear()
         self.dry_run_button.configure(state="disabled")
+        self._open_progress_dialog(title="Dry-run", allow_cancel=True)
         self.log_viewer.add_line("開始掃描...")
         self.progress_bar.update_progress(0)
         worker = threading.Thread(target=self._run_scan, args=(source_path,), daemon=True)
@@ -313,6 +317,7 @@ class MainWindow:
         self.cancel_event.clear()
         self.dry_run_button.configure(state="disabled")
         self.execute_button.configure(state="disabled")
+        self._open_progress_dialog(title="Execute", allow_cancel=True)
         self.log_viewer.add_line("開始執行...")
         self.progress_bar.update_progress(0)
         worker = threading.Thread(target=self._run_execute, daemon=True)
@@ -321,12 +326,8 @@ class MainWindow:
     def _on_rollback(self) -> None:
         if self._is_running:
             return
-        selected = filedialog.askdirectory(title="選擇要回滾的 Processed_* 資料夾")
-        if not selected:
-            return
-        processed_dir = Path(selected)
-        if not processed_dir.exists():
-            self.log_viewer.add_line("指定的資料夾不存在")
+        processed_dir = self._select_rollback_dir()
+        if processed_dir is None:
             return
 
         self._is_running = True
@@ -334,6 +335,7 @@ class MainWindow:
         self.dry_run_button.configure(state="disabled")
         self.execute_button.configure(state="disabled")
         self.rollback_button.configure(state="disabled")
+        self._open_progress_dialog(title="Rollback", allow_cancel=False)
         self.log_viewer.add_line("開始回滾...")
         self.progress_bar.update_progress(0)
         worker = threading.Thread(
@@ -407,10 +409,16 @@ class MainWindow:
                 item_type = item.get("type")
                 if item_type == "log":
                     self.log_viewer.add_line(str(item.get("message")))
+                    if self._progress_dialog is not None:
+                        self._progress_dialog.add_line(str(item.get("message")))
                 elif item_type == "progress":
                     self.progress_bar.update_progress(int(item.get("value", 0)))
+                    if self._progress_dialog is not None:
+                        self._progress_dialog.update_progress(int(item.get("value", 0)))
                 elif item_type == "stage":
                     self.stage_label.configure(text=str(item.get("message")))
+                    if self._progress_dialog is not None:
+                        self._progress_dialog.update_stage(str(item.get("message")))
                 elif item_type == "enable_execute":
                     state = "normal" if item.get("value") else "disabled"
                     self.execute_button.configure(state=state)
@@ -418,9 +426,59 @@ class MainWindow:
                     self._is_running = False
                     self.dry_run_button.configure(state="normal")
                     self.rollback_button.configure(state="normal")
+                    self._close_progress_dialog()
         except queue.Empty:
             pass
         self.root.after(100, self._poll_queue)
+
+    def _open_progress_dialog(self, title: str, allow_cancel: bool) -> None:
+        self._close_progress_dialog()
+        self._progress_dialog = ProgressDialog(
+            self.root,
+            title=title,
+            allow_cancel=allow_cancel,
+            cancel_callback=self._on_cancel,
+        )
+        self._progress_dialog.update_stage("階段: 準備中")
+
+    def _close_progress_dialog(self) -> None:
+        if self._progress_dialog is not None:
+            self._progress_dialog.close()
+            self._progress_dialog = None
+
+    def _on_cancel(self) -> None:
+        self.cancel_event.set()
+
+    def _select_rollback_dir(self) -> Optional[Path]:
+        candidates = []
+        root = self._default_processed_root()
+        if root is not None and root.exists():
+            candidates = sorted(root.glob("Processed_*"), key=lambda p: p.name)
+
+        if not candidates:
+            selected = filedialog.askdirectory(title="選擇要回滾的 Processed_* 資料夾")
+            if not selected:
+                return None
+            processed_dir = Path(selected)
+            if not processed_dir.exists():
+                self.log_viewer.add_line("指定的資料夾不存在")
+                return None
+            return processed_dir
+
+        dialog = RollbackDialog(self.root, candidates)
+        self.root.wait_window(dialog)
+        if dialog.selection is None:
+            return None
+        return dialog.selection.processed_dir
+
+    def _default_processed_root(self) -> Optional[Path]:
+        output_value = self.output_selector.path_var.get().strip()
+        if output_value:
+            return Path(output_value).parent
+        source_value = self.source_selector.path_var.get().strip()
+        if source_value:
+            return Path(source_value)
+        return None
 
     def run(self) -> None:
         self.root.mainloop()

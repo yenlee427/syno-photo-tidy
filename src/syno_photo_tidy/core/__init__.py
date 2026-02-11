@@ -10,6 +10,7 @@ from .manifest import (
     append_manifest_entries,
     read_manifest_records,
 )
+from .pipeline import Pipeline
 from .renamer import Renamer
 from .rollback import RollbackRunner
 from .scanner import FileScanner
@@ -25,6 +26,7 @@ __all__ = [
     "ManifestContext",
     "ManifestWriter",
     "append_manifest_entries",
+    "Pipeline",
     "Renamer",
     "RollbackRunner",
     "ThumbnailDetector",
