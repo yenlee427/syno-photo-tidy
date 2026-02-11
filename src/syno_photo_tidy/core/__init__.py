@@ -3,7 +3,12 @@
 from .action_planner import ActionPlanner
 from .exact_deduper import ExactDeduper
 from .executor import PlanExecutor
-from .manifest import ManifestContext, ManifestWriter, read_manifest_records
+from .manifest import (
+    ManifestContext,
+    ManifestWriter,
+    append_manifest_entries,
+    read_manifest_records,
+)
 from .scanner import FileScanner
 from .thumbnail_detector import ThumbnailDetector
 
@@ -14,6 +19,7 @@ __all__ = [
     "PlanExecutor",
     "ManifestContext",
     "ManifestWriter",
+    "append_manifest_entries",
     "ThumbnailDetector",
     "read_manifest_records",
 ]

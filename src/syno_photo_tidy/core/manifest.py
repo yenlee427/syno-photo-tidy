@@ -97,3 +97,19 @@ def read_manifest_records(manifest_path: Path) -> list[dict[str, object]]:
         logger = get_logger("ManifestReader")
         logger.warning(f"無法讀取 manifest: {manifest_path} ({exc})")
     return records
+
+
+def append_manifest_entries(
+    manifest_path: Path,
+    entries: Iterable[ManifestEntry],
+    logger=None,
+) -> None:
+    logger = logger or get_logger("ManifestAppender")
+    try:
+        with manifest_path.open("a", encoding="utf-8") as handle:
+            for entry in entries:
+                payload = entry.to_dict()
+                payload["record_type"] = "ACTION"
+                handle.write(json.dumps(payload, ensure_ascii=True) + "\n")
+    except OSError as exc:
+        logger.warning(f"無法追加 manifest: {manifest_path} ({exc})")

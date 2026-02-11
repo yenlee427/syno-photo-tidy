@@ -7,9 +7,18 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 from pathlib import Path
+from typing import Optional
 
 from ..config import ConfigManager
-from ..core import ActionPlanner, ExactDeduper, FileScanner, ManifestContext, ThumbnailDetector
+from ..core import (
+    ActionPlanner,
+    ExactDeduper,
+    FileScanner,
+    ManifestContext,
+    PlanExecutor,
+    ThumbnailDetector,
+    append_manifest_entries,
+)
 from ..utils import path_utils, reporting, time_utils
 from ..utils.logger import get_logger
 from .settings_panel import SettingsPanel
@@ -26,6 +35,7 @@ class MainWindow:
         self.thumbnail_detector = ThumbnailDetector(self.config, self.logger)
         self.exact_deduper = ExactDeduper(self.config, self.logger)
         self.action_planner = ActionPlanner(self.config, self.logger)
+        self.executor = PlanExecutor(self.logger)
         self.root = tk.Tk()
         self.root.title("syno-photo-tidy")
         self.root.geometry("640x520")
@@ -33,6 +43,8 @@ class MainWindow:
         self.queue: queue.Queue[dict[str, object]] = queue.Queue()
         self.cancel_event = threading.Event()
         self._is_running = False
+        self._last_plan = []
+        self._last_report_dir: Optional[Path] = None
 
         self._build_layout()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -67,7 +79,9 @@ class MainWindow:
             button_frame, text="Dry-run Scan", command=self._on_dry_run
         )
         self.dry_run_button.pack(side=tk.LEFT)
-        self.execute_button = ttk.Button(button_frame, text="Execute", state="disabled")
+        self.execute_button = ttk.Button(
+            button_frame, text="Execute", state="disabled", command=self._on_execute
+        )
         self.execute_button.pack(side=tk.LEFT, padx=(8, 0))
 
         self.settings_panel = SettingsPanel(container, self.config)
@@ -212,6 +226,49 @@ class MainWindow:
 
         self.queue.put({"type": "progress", "value": 100})
         self.queue.put({"type": "stage", "message": "階段: 完成"})
+        self.queue.put({"type": "enable_execute", "value": not no_changes})
+        self.queue.put({"type": "done"})
+
+        self._last_plan = plan_result.plan
+        self._last_report_dir = report_dir
+
+    def _on_execute(self) -> None:
+        if self._is_running:
+            return
+        if not self._last_plan or self._last_report_dir is None:
+            self.log_viewer.add_line("請先完成 Dry-run Scan")
+            return
+
+        self._is_running = True
+        self.cancel_event.clear()
+        self.dry_run_button.configure(state="disabled")
+        self.execute_button.configure(state="disabled")
+        self.log_viewer.add_line("開始執行...")
+        self.progress_bar.update_progress(0)
+        worker = threading.Thread(target=self._run_execute, daemon=True)
+        worker.start()
+
+    def _run_execute(self) -> None:
+        self.queue.put({"type": "stage", "message": "階段: Executing..."})
+        result = self.executor.execute_plan(self._last_plan, cancel_event=self.cancel_event)
+        entries = result.executed_entries + result.failed_entries
+        if self._last_report_dir is not None and entries:
+            manifest_path = self._last_report_dir / "manifest.jsonl"
+            append_manifest_entries(manifest_path, entries, logger=self.logger)
+
+        if result.cancelled:
+            self.queue.put({"type": "log", "message": "已取消執行"})
+        else:
+            self.queue.put(
+                {
+                    "type": "log",
+                    "message": f"執行完成：成功 {len(result.executed_entries)}，失敗 {len(result.failed_entries)}",
+                }
+            )
+
+        self.queue.put({"type": "enable_execute", "value": False})
+        self.queue.put({"type": "progress", "value": 100})
+        self.queue.put({"type": "stage", "message": "階段: 完成"})
         self.queue.put({"type": "done"})
 
     def _poll_queue(self) -> None:
@@ -225,6 +282,9 @@ class MainWindow:
                     self.progress_bar.update_progress(int(item.get("value", 0)))
                 elif item_type == "stage":
                     self.stage_label.configure(text=str(item.get("message")))
+                elif item_type == "enable_execute":
+                    state = "normal" if item.get("value") else "disabled"
+                    self.execute_button.configure(state=state)
                 elif item_type == "done":
                     self._is_running = False
                     self.dry_run_button.configure(state="normal")
