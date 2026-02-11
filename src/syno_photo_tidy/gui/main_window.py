@@ -152,6 +152,9 @@ class MainWindow:
                 log_callback=lambda message: self.queue.put(
                     {"type": "log", "message": message}
                 ),
+                detail_callback=lambda message: self.queue.put(
+                    {"type": "detail", "message": message}
+                ),
             )
         except RuntimeError:
             self.queue.put({"type": "log", "message": "已取消作業"})

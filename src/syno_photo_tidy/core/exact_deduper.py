@@ -31,12 +31,17 @@ class ExactDeduper:
         self.algorithms = self._load_algorithms(config)
         self.chunk_size_kb = int(config.get("hash.chunk_size_kb", 1024))
 
-    def dedupe(self, files: Iterable[FileInfo]) -> DedupeResult:
+    def dedupe(
+        self,
+        files: Iterable[FileInfo],
+        progress_callback=None,
+    ) -> DedupeResult:
         groups: dict[str, List[FileInfo]] = {}
         keepers: List[FileInfo] = []
         duplicates: List[FileInfo] = []
         dedupe_groups: List[DedupeGroup] = []
 
+        processed = 0
         for item in files:
             hashes = hash_calc.compute_hashes(
                 item.path,
@@ -51,6 +56,9 @@ class ExactDeduper:
                 keepers.append(item)
                 continue
             groups.setdefault(hash_key, []).append(item)
+            processed += 1
+            if progress_callback is not None:
+                progress_callback(processed)
 
         for hash_value, items in groups.items():
             if len(items) == 1:

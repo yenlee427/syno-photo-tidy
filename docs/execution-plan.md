@@ -682,8 +682,8 @@ syno-photo-tidy/
 
 **工作內容**：
 - [x] CLI 介面（dry-run/execute/rollback）。
-- [ ] 設定檔 UI 強化。
-- [ ] 效能優化。
+- [x] 設定檔 UI 強化。
+- [x] 進度估計強化（更精準的階段/ETA）。
 
 **驗收標準**：
 - CLI 可完成 dry-run/execute/rollback。

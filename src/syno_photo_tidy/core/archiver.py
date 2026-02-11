@@ -27,7 +27,12 @@ class Archiver:
         self.unknown_folder = str(config.get("archive.unknown_folder", "unknown"))
         self.sequence_digits = int(config.get("archive.sequence_digits", 3))
 
-    def generate_plan(self, files: Iterable[FileInfo], output_root: Path) -> ArchiveResult:
+    def generate_plan(
+        self,
+        files: Iterable[FileInfo],
+        output_root: Path,
+        progress_callback=None,
+    ) -> ArchiveResult:
         if not self.enabled:
             return ArchiveResult(plan=[], skipped=list(files))
 
@@ -35,6 +40,7 @@ class Archiver:
         skipped: list[FileInfo] = []
         planned_names: dict[Path, set[str]] = {}
 
+        processed = 0
         for item in files:
             target = self._build_target_path(item, output_root, planned_names)
             if target is None:
@@ -48,6 +54,9 @@ class Archiver:
                     dst_path=target,
                 )
             )
+            processed += 1
+            if progress_callback is not None:
+                progress_callback(processed)
 
         return ArchiveResult(plan=plan, skipped=skipped)
 

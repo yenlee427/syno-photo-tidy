@@ -30,18 +30,26 @@ class VisualDeduper:
         self.logger = logger or get_logger(self.__class__.__name__)
         self.threshold = int(config.get("phash.threshold", 8))
 
-    def dedupe(self, files: Iterable[FileInfo]) -> VisualDedupeResult:
+    def dedupe(
+        self,
+        files: Iterable[FileInfo],
+        progress_callback=None,
+    ) -> VisualDedupeResult:
         keepers: List[FileInfo] = []
         duplicates: List[FileInfo] = []
         groups: List[VisualDedupeGroup] = []
 
         hashed_items: list[tuple[FileInfo, object]] = []
+        processed = 0
         for item in files:
             phash = image_utils.compute_phash(item.path, self.logger)
             if phash is None:
                 keepers.append(item)
                 continue
             hashed_items.append((item, phash))
+            processed += 1
+            if progress_callback is not None:
+                progress_callback(processed)
 
         raw_groups: list[list[tuple[FileInfo, object]]] = []
         for item, phash in hashed_items:

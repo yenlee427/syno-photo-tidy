@@ -49,39 +49,107 @@ class Pipeline:
         progress_callback: Optional[Callable[[int], None]] = None,
         stage_callback: Optional[Callable[[str], None]] = None,
         log_callback: Optional[Callable[[str], None]] = None,
+        detail_callback: Optional[Callable[[str], None]] = None,
     ) -> PipelineResult:
         stage_callback = stage_callback or (lambda _message: None)
         log_callback = log_callback or (lambda _message: None)
+        detail_callback = detail_callback or (lambda _message: None)
+
+        weights = {
+            "scan": 40,
+            "thumb": 10,
+            "exact": 15,
+            "visual": 15,
+            "rename": 10,
+            "archive": 10,
+        }
+        total_weight = 0
+
+        def update_weighted_progress(weight: int, current: int, total: int) -> None:
+            if progress_callback is None:
+                return
+            total_value = max(1, total)
+            percent = total_weight + int(weight * current / total_value)
+            progress_callback(min(99, percent))
+
+        stage_callback("階段: Pre-scan...")
+        total_files = self.scanner.count_files(
+            source_path,
+            cancel_event=cancel_event,
+        )
+        detail_callback(f"預估檔案數量: {total_files}")
+        if cancel_event is not None and cancel_event.is_set():
+            raise RuntimeError("Cancelled")
 
         stage_callback("階段: Scanning...")
+        processed_scan = 0
         results = self.scanner.scan_directory(
             source_path,
             cancel_event=cancel_event,
-            progress_callback=progress_callback,
+            progress_callback=lambda count: (
+                update_weighted_progress(weights["scan"], count, total_files),
+                detail_callback(f"已掃描 {count}/{total_files}"),
+            ),
         )
         if cancel_event is not None and cancel_event.is_set():
             raise RuntimeError("Cancelled")
+        total_weight += weights["scan"]
+        if progress_callback is not None:
+            progress_callback(min(99, total_weight))
 
         log_callback(f"掃描完成，共 {len(results)} 個檔案")
         stage_callback("階段: Thumbnail detection...")
         keepers, thumbnails = self.thumbnail_detector.classify_files(results)
+        total_weight += weights["thumb"]
+        if progress_callback is not None:
+            progress_callback(min(99, total_weight))
         log_callback(f"偵測到 {len(thumbnails)} 個縮圖")
 
         stage_callback("階段: Exact hash dedupe...")
-        dedupe_result = self.exact_deduper.dedupe(keepers)
+        dedupe_result = self.exact_deduper.dedupe(
+            keepers,
+            progress_callback=lambda count: update_weighted_progress(
+                weights["exact"],
+                count,
+                len(keepers),
+            ),
+        )
         keepers = dedupe_result.keepers
         exact_duplicates = dedupe_result.duplicates
+        total_weight += weights["exact"]
+        if progress_callback is not None:
+            progress_callback(min(99, total_weight))
         log_callback(f"偵測到 {len(exact_duplicates)} 個精確重複檔案")
 
         stage_callback("階段: Visual hash dedupe...")
-        visual_result = self.visual_deduper.dedupe(keepers)
+        visual_result = self.visual_deduper.dedupe(
+            keepers,
+            progress_callback=lambda count: update_weighted_progress(
+                weights["visual"],
+                count,
+                len(keepers),
+            ),
+        )
         keepers = visual_result.keepers
         visual_duplicates = visual_result.duplicates
+        total_weight += weights["visual"]
+        if progress_callback is not None:
+            progress_callback(min(99, total_weight))
         log_callback(f"偵測到 {len(visual_duplicates)} 個相似重複檔案")
 
         stage_callback("階段: Renaming...")
-        rename_result = self.renamer.generate_plan(keepers)
+        rename_result = self.renamer.generate_plan(
+            keepers,
+            progress_callback=lambda count: update_weighted_progress(
+                weights["rename"],
+                count,
+                len(keepers),
+            ),
+        )
         log_callback(f"計畫重新命名 {len(rename_result.plan)} 個檔案")
+        total_weight += weights["rename"]
+        if progress_callback is not None:
+            progress_callback(min(99, total_weight))
 
         rename_map = {
             item.src_path: item.dst_path
@@ -93,8 +161,19 @@ class Pipeline:
         ]
 
         stage_callback("階段: Archiving...")
-        archive_result = self.archiver.generate_plan(renamed_keepers, output_root)
+        archive_result = self.archiver.generate_plan(
+            renamed_keepers,
+            output_root,
+            progress_callback=lambda count: update_weighted_progress(
+                weights["archive"],
+                count,
+                len(renamed_keepers),
+            ),
+        )
         log_callback(f"計畫封存 {len(archive_result.plan)} 個檔案")
+        total_weight += weights["archive"]
+        if progress_callback is not None:
+            progress_callback(min(99, total_weight))
 
         duplicates_with_reason = (
             [(item, "DUPLICATE_HASH") for item in exact_duplicates]

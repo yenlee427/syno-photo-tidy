@@ -65,6 +65,45 @@ class FileScanner:
 
         return results
 
+    def count_files(
+        self,
+        root: Path,
+        cancel_event=None,
+        progress_callback: Optional[Callable[[int], None]] = None,
+    ) -> int:
+        if not root.exists():
+            return 0
+
+        total = 0
+        for dirpath, dirnames, filenames in os.walk(root):
+            current_dir = Path(dirpath)
+            if self.should_exclude_path(current_dir):
+                dirnames[:] = []
+                continue
+
+            filtered_dirs: list[str] = []
+            for name in dirnames:
+                candidate = current_dir / name
+                if self.should_exclude_path(candidate):
+                    continue
+                filtered_dirs.append(name)
+            dirnames[:] = filtered_dirs
+
+            for name in filenames:
+                if cancel_event is not None and cancel_event.is_set():
+                    return total
+                file_path = current_dir / name
+                if self.should_exclude_path(file_path):
+                    continue
+                if not file_path.is_file():
+                    continue
+
+                total += 1
+                if progress_callback:
+                    progress_callback(total)
+
+        return total
+
     def _build_file_info(self, path: Path) -> Optional[FileInfo]:
         try:
             stat = path.stat()

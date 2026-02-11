@@ -51,6 +51,10 @@ class ProgressDialog(tk.Toplevel):
         self.elapsed_label = ttk.Label(container, textvariable=self.elapsed_var)
         self.elapsed_label.pack(anchor=tk.W, pady=(6, 0))
 
+        self.eta_var = tk.StringVar(value="ETA: --")
+        self.eta_label = ttk.Label(container, textvariable=self.eta_var)
+        self.eta_label.pack(anchor=tk.W)
+
         button_frame = ttk.Frame(container)
         button_frame.pack(fill=tk.X, pady=(8, 0))
         self.cancel_button = ttk.Button(
@@ -72,6 +76,7 @@ class ProgressDialog(tk.Toplevel):
     def update_progress(self, value: int) -> None:
         self.progress_bar.update_progress(value)
         self._update_elapsed()
+        self._update_eta(value)
 
     def add_line(self, message: str) -> None:
         self.log_viewer.add_line(message)
@@ -91,3 +96,15 @@ class ProgressDialog(tk.Toplevel):
     def _update_elapsed(self) -> None:
         elapsed = int(time.time() - self._start_time)
         self.elapsed_var.set(f"耗時: {elapsed}s")
+
+    def _update_eta(self, percent: int) -> None:
+        if percent <= 0:
+            self.eta_var.set("ETA: --")
+            return
+        elapsed = time.time() - self._start_time
+        remaining = int(elapsed * (100 - percent) / percent)
+        minutes, seconds = divmod(max(0, remaining), 60)
+        if minutes:
+            self.eta_var.set(f"ETA: {minutes}m {seconds}s")
+        else:
+            self.eta_var.set(f"ETA: {seconds}s")

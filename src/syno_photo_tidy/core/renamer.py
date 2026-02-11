@@ -27,13 +27,14 @@ class Renamer:
         self.pattern = str(config.get("rename.pattern", "{date}_{time}"))
         self.sequence_digits = int(config.get("rename.sequence_digits", 3))
 
-    def generate_plan(self, files: Iterable[FileInfo]) -> RenameResult:
+    def generate_plan(self, files: Iterable[FileInfo], progress_callback=None) -> RenameResult:
         if not self.enabled:
             return RenameResult(plan=[], skipped=list(files))
         plan: list[ActionItem] = []
         skipped: list[FileInfo] = []
         planned_names: dict[Path, set[str]] = {}
 
+        processed = 0
         for item in files:
             target = self._build_target_path(item, planned_names)
             if target is None:
@@ -47,6 +48,9 @@ class Renamer:
                     dst_path=target,
                 )
             )
+            processed += 1
+            if progress_callback is not None:
+                progress_callback(processed)
         return RenameResult(plan=plan, skipped=skipped)
 
     def _build_target_path(
