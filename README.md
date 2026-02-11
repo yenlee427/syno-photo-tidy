@@ -54,6 +54,7 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 - CLI 介面（dry-run/execute/rollback）
 - 設定檔 UI 強化
 - 進度估計強化（更精準的階段/ETA）
+- 精確去重強化（size + 多重 hash）
 
 ## 安全規範（不可違反）
 - 程式**不得**呼叫 delete/unlink/rmtree，且不提供刪除 UI/CLI。

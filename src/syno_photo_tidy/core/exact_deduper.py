@@ -41,24 +41,32 @@ class ExactDeduper:
         duplicates: List[FileInfo] = []
         dedupe_groups: List[DedupeGroup] = []
 
-        processed = 0
+        size_groups: dict[int, List[FileInfo]] = {}
         for item in files:
-            hashes = hash_calc.compute_hashes(
-                item.path,
-                algorithms=self.algorithms,
-                chunk_size_kb=self.chunk_size_kb,
-                logger=self.logger,
-            )
-            item.hash_md5 = hashes.get("md5")
-            item.hash_sha256 = hashes.get("sha256")
-            hash_key = item.hash_sha256 or item.hash_md5
-            if not hash_key:
-                keepers.append(item)
+            size_groups.setdefault(item.size_bytes, []).append(item)
+
+        processed = 0
+        for items in size_groups.values():
+            if len(items) == 1:
+                keepers.extend(items)
                 continue
-            groups.setdefault(hash_key, []).append(item)
-            processed += 1
-            if progress_callback is not None:
-                progress_callback(processed)
+            for item in items:
+                hashes = hash_calc.compute_hashes(
+                    item.path,
+                    algorithms=self.algorithms,
+                    chunk_size_kb=self.chunk_size_kb,
+                    logger=self.logger,
+                )
+                item.hash_md5 = hashes.get("md5")
+                item.hash_sha256 = hashes.get("sha256")
+                hash_key = self._build_hash_key(item)
+                if not hash_key:
+                    keepers.append(item)
+                    continue
+                groups.setdefault(hash_key, []).append(item)
+                processed += 1
+                if progress_callback is not None:
+                    progress_callback(processed)
 
         for hash_value, items in groups.items():
             if len(items) == 1:
@@ -94,3 +102,12 @@ class ExactDeduper:
             return (-area, -item.size_bytes, str(item.path))
 
         return sorted(items, key=score)[0]
+
+    def _build_hash_key(self, item: FileInfo) -> str | None:
+        if item.hash_sha256 and item.hash_md5:
+            return f"{item.size_bytes}:{item.hash_sha256}:{item.hash_md5}"
+        if item.hash_sha256:
+            return f"{item.size_bytes}:{item.hash_sha256}"
+        if item.hash_md5:
+            return f"{item.size_bytes}:{item.hash_md5}"
+        return None
