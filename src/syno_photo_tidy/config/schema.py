@@ -14,6 +14,7 @@ def validate_config(config: dict[str, Any]) -> list[str]:
     hash_config = config.get("hash", {})
     algorithms = hash_config.get("algorithms")
     chunk_size_kb = hash_config.get("chunk_size_kb")
+    parallel_workers = hash_config.get("parallel_workers", 1)
 
     if not isinstance(algorithms, list) or not algorithms:
         add_error("hash.algorithms", "必須是非空清單")
@@ -25,6 +26,8 @@ def validate_config(config: dict[str, Any]) -> list[str]:
 
     if not isinstance(chunk_size_kb, int) or chunk_size_kb <= 0:
         add_error("hash.chunk_size_kb", "必須是正整數")
+    if not isinstance(parallel_workers, int) or parallel_workers <= 0:
+        add_error("hash.parallel_workers", "必須是正整數")
 
     phash = config.get("phash", {})
     threshold = phash.get("threshold")

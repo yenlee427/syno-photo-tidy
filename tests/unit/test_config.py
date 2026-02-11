@@ -8,6 +8,7 @@ def test_config_load_defaults() -> None:
     assert config.get("rename.pattern") == "{date}_{time}"
     assert config.get("rename.enabled") is True
     assert config.get("archive.enabled") is True
+    assert config.get("hash.parallel_workers") == 4
 
 
 def test_config_validation() -> None:

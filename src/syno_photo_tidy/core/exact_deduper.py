@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Iterable, List
 
@@ -30,6 +31,7 @@ class ExactDeduper:
         self.logger = logger or get_logger(self.__class__.__name__)
         self.algorithms = self._load_algorithms(config)
         self.chunk_size_kb = int(config.get("hash.chunk_size_kb", 1024))
+        self.parallel_workers = int(config.get("hash.parallel_workers", 1))
 
     def dedupe(
         self,
@@ -50,23 +52,23 @@ class ExactDeduper:
             if len(items) == 1:
                 keepers.extend(items)
                 continue
-            for item in items:
-                hashes = hash_calc.compute_hashes(
-                    item.path,
-                    algorithms=self.algorithms,
-                    chunk_size_kb=self.chunk_size_kb,
-                    logger=self.logger,
+            if self.parallel_workers > 1:
+                processed = self._hash_group_parallel(
+                    items,
+                    groups,
+                    keepers,
+                    processed,
+                    progress_callback,
                 )
-                item.hash_md5 = hashes.get("md5")
-                item.hash_sha256 = hashes.get("sha256")
-                hash_key = self._build_hash_key(item)
-                if not hash_key:
-                    keepers.append(item)
-                    continue
-                groups.setdefault(hash_key, []).append(item)
-                processed += 1
-                if progress_callback is not None:
-                    progress_callback(processed)
+            else:
+                for item in items:
+                    processed = self._hash_item(
+                        item,
+                        groups,
+                        keepers,
+                        processed,
+                        progress_callback,
+                    )
 
         for hash_value, items in groups.items():
             if len(items) == 1:
@@ -111,3 +113,64 @@ class ExactDeduper:
         if item.hash_md5:
             return f"{item.size_bytes}:{item.hash_md5}"
         return None
+
+    def _hash_item(
+        self,
+        item: FileInfo,
+        groups: dict[str, List[FileInfo]],
+        keepers: List[FileInfo],
+        processed: int,
+        progress_callback,
+    ) -> int:
+        hashes = hash_calc.compute_hashes(
+            item.path,
+            algorithms=self.algorithms,
+            chunk_size_kb=self.chunk_size_kb,
+            logger=self.logger,
+        )
+        item.hash_md5 = hashes.get("md5")
+        item.hash_sha256 = hashes.get("sha256")
+        hash_key = self._build_hash_key(item)
+        if not hash_key:
+            keepers.append(item)
+            return processed
+        groups.setdefault(hash_key, []).append(item)
+        processed += 1
+        if progress_callback is not None:
+            progress_callback(processed)
+        return processed
+
+    def _hash_group_parallel(
+        self,
+        items: list[FileInfo],
+        groups: dict[str, List[FileInfo]],
+        keepers: List[FileInfo],
+        processed: int,
+        progress_callback,
+    ) -> int:
+        with ThreadPoolExecutor(max_workers=self.parallel_workers) as executor:
+            future_map = {
+                executor.submit(self._compute_hashes, item): item for item in items
+            }
+            for future in as_completed(future_map):
+                item, hashes = future.result()
+                item.hash_md5 = hashes.get("md5")
+                item.hash_sha256 = hashes.get("sha256")
+                hash_key = self._build_hash_key(item)
+                if not hash_key:
+                    keepers.append(item)
+                    continue
+                groups.setdefault(hash_key, []).append(item)
+                processed += 1
+                if progress_callback is not None:
+                    progress_callback(processed)
+        return processed
+
+    def _compute_hashes(self, item: FileInfo) -> tuple[FileInfo, dict[str, str]]:
+        hashes = hash_calc.compute_hashes(
+            item.path,
+            algorithms=self.algorithms,
+            chunk_size_kb=self.chunk_size_kb,
+            logger=self.logger,
+        )
+        return item, hashes

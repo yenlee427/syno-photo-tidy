@@ -4,6 +4,7 @@ DEFAULT_CONFIG = {
     "hash": {
         "algorithms": ["sha256", "md5"],
         "chunk_size_kb": 1024,
+        "parallel_workers": 4,
     },
     "phash": {
         "threshold": 8,

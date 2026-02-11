@@ -685,6 +685,7 @@ syno-photo-tidy/
 - [x] 設定檔 UI 強化。
 - [x] 進度估計強化（更精準的階段/ETA）。
 - [x] 精確去重強化（size + 多重 hash）。
+- [x] hash 併行（平行計算）。
 
 **驗收標準**：
 - CLI 可完成 dry-run/execute/rollback。
