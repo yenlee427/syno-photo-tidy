@@ -351,92 +351,127 @@ def is_thumbnail(self, file_info: FileInfo) -> bool:
 
 ---
 
-## 完整檔案結構（v0.1）
+### PR #6: 精確雜湊去重 (1天)
+
+**工作內容**：
+- [x] 實作 `core/exact_deduper.py` - 精確雜湊去重邏輯。
+- [x] 實作 `utils/hash_calc.py` - 計算 MD5 和 SHA256 雜湊值的工具函數。
+- [x] 單元測試：
+  - [x] `test_exact_deduper.py`
+  - [x] `test_hash_calc.py`
+
+**驗收標準**：
+- 精確雜湊去重功能可正確識別並移除重複檔案。
+- 單元測試通過。
+
+---
+
+### PR #7: Manifest 管理 (1天)
+
+**工作內容**：
+- [x] 實作 `core/manifest.py` - 管理 manifest 的新增、更新與讀取。
+- [x] 單元測試：
+  - [x] `test_manifest.py`
+
+**驗收標準**：
+- Manifest 檔案可正確記錄 RUN 和 ACTION 資訊。
+- 單元測試通過。
+
+---
+
+### PR #8: Dry-run 報告更新 (1天)
+
+**工作內容**：
+- [x] 更新 `reporting.py` - 在報告中新增重複檔案統計資訊。
+- [x] 更新整合測試：
+  - [x] `test_basic_workflow.py`
+
+**驗收標準**：
+- Dry-run 報告包含重複檔案統計資訊。
+- 整合測試通過。
+
+---
+
+## v0.2 目標
+
+新增功能與改進：
+1. **精確雜湊去重** - 使用 MD5/SHA256 雜湊值進行檔案去重，確保精確性。
+2. **Manifest 管理** - 增加 RUN 和 ACTION 記錄，支援回滾與操作追蹤。
+3. **Dry-run 報告更新** - 報告中新增重複檔案統計資訊。
+
+**預計時間**：3-4 天  
+**版本號**：0.2.0
+
+---
+
+## v0.2 工作分解（按 PR 順序）
+
+### PR #6: 精確雜湊去重 (1天)
+
+**工作內容**：
+- [x] 實作 `core/exact_deduper.py` - 精確雜湊去重邏輯。
+- [x] 實作 `utils/hash_calc.py` - 計算 MD5 和 SHA256 雜湊值的工具函數。
+- [x] 單元測試：
+  - [x] `test_exact_deduper.py`
+  - [x] `test_hash_calc.py`
+
+**驗收標準**：
+- 精確雜湊去重功能可正確識別並移除重複檔案。
+- 單元測試通過。
+
+---
+
+### PR #7: Manifest 管理 (1天)
+
+**工作內容**：
+- [x] 實作 `core/manifest.py` - 管理 manifest 的新增、更新與讀取。
+- [x] 單元測試：
+  - [x] `test_manifest.py`
+
+**驗收標準**：
+- Manifest 檔案可正確記錄 RUN 和 ACTION 資訊。
+- 單元測試通過。
+
+---
+
+### PR #8: Dry-run 報告更新 (1天)
+
+**工作內容**：
+- [x] 更新 `reporting.py` - 在報告中新增重複檔案統計資訊。
+- [x] 更新整合測試：
+  - [x] `test_basic_workflow.py`
+
+**驗收標準**：
+- Dry-run 報告包含重複檔案統計資訊。
+- 整合測試通過。
+
+---
+
+## 完整檔案結構（v0.2）
 
 ```
 syno-photo-tidy/
 ├── src/
 │   └── syno_photo_tidy/
-│       ├── __init__.py                    # ✅ 版本: "0.1.0"
-│       ├── main.py                        # ✅ GUI 啟動入口
-│       │
-│       ├── core/                          # 核心處理邏輯
-│       │   ├── __init__.py
-│       │   ├── scanner.py                 # ✅ Phase 1: 檔案掃描 (PR#4)
-│       │   ├── thumbnail_detector.py      # ✅ Phase 2: 縮圖判定 (PR#5)
-│       │   ├── action_planner.py          # ✅ Phase 5: 行動計畫 (PR#5)
+│       ├── core/
 │       │   ├── exact_deduper.py          # v0.2: Phase 3
-│       │   ├── visual_deduper.py         # v0.4: Phase 4
-│       │   ├── executor.py               # v0.3: Phase 6
-│       │   ├── renamer.py                # v0.5: Phase 7
-│       │   ├── archiver.py               # v0.5: Phase 8
 │       │   ├── manifest.py               # v0.2: manifest 管理
-│       │   ├── rollback.py               # v0.6: 回滾引擎
-│       │   └── pipeline.py               # v0.2: Pipeline 協調
+│       │   ├── pipeline.py               # v0.2: Pipeline 協調
 │       │
-│       ├── gui/                          # GUI 介面層
-│       │   ├── __init__.py
-│       │   ├── main_window.py            # ✅ 主視窗 (PR#3)
-│       │   ├── progress_dialog.py        # v0.8: 進階進度視窗
-│       │   ├── settings_panel.py         # ✅ 設定面板 (PR#3)
-│       │   ├── rollback_dialog.py        # v0.6: Rollback 視窗
-│       │   └── widgets/                  # 自訂 GUI 元件
-│       │       ├── __init__.py
-│       │       ├── file_selector.py      # ✅ 資料夾選擇器 (PR#3)
-│       │       ├── progress_bar.py       # ✅ 進度條 (PR#3)
-│       │       └── log_viewer.py         # ✅ 日誌顯示 (PR#3)
-│       │
-│       ├── config/                       # 設定管理
-│       │   ├── __init__.py
-│       │   ├── manager.py                # ✅ 設定管理器 (PR#1)
-│       │   ├── schema.py                 # ✅ 驗證邏輯 (PR#1)
-│       │   └── defaults.py               # ✅ 預設值 (PR#1)
-│       │
-│       ├── utils/                        # 工具函數
-│       │   ├── __init__.py
-│       │   ├── file_ops.py               # v0.3: 安全 move/copy
+│       ├── utils/
 │       │   ├── hash_calc.py              # v0.2: MD5/SHA256
-│       │   ├── image_utils.py            # ✅ 影像處理 (PR#4)
-│       │   ├── path_utils.py             # ✅ 路徑處理 (PR#4)
-│       │   ├── time_utils.py             # ✅ 時間處理 (PR#4)
-│       │   ├── error_handler.py          # ✅ 錯誤處理 (PR#2)
-│       │   └── logger.py                 # ✅ 日誌系統 (PR#1)
 │       │
-│       └── models/                       # 資料模型
-│           ├── __init__.py
-│           ├── file_info.py              # ✅ FileInfo (PR#2)
-│           ├── action_item.py            # ✅ ActionItem (PR#2)
-│           ├── error_record.py           # ✅ ProcessError (PR#2)
-│           └── manifest_entry.py         # ✅ ManifestEntry 骨架 (PR#2)
+│       └── integration/
+│           └── test_basic_workflow.py    # ✅ v0.2 基本流程
 │
-├── tests/                                # 測試套件
-│   ├── __init__.py
-│   ├── conftest.py                       # ✅ pytest 設定 (PR#1)
-│   ├── test_data/                        # ✅ 測試資料 (PR#1)
-│   │   └── images/                       # 測試影像樣本
-│   │       ├── original_4000x3000.jpg    # 原圖範例
-│   │       ├── thumbnail_320x240.jpg     # 縮圖範例
-│   │       └── test_image.heic           # HEIC 範例（可選）
-│   │
-│   ├── unit/                            # 單元測試
-│   │   ├── test_scanner.py               # ✅ scanner 測試 (PR#4)
-│   │   ├── test_thumbnail_detector.py    # ✅ 縮圖偵測測試 (PR#5)
-│   │   ├── test_config.py                # ✅ 設定系統測試 (PR#1)
-│   │   └── test_models.py                # ✅ 資料模型測試 (PR#2)
-│   │
-│   └── integration/                      # 整合測試
-│       └── test_basic_workflow.py        # ✅ v0.1 基本流程 (PR#5)
+├── tests/
+│   ├── unit/
+│   │   ├── test_exact_deduper.py         # v0.2: 精確雜湊去重測試
+│   │   ├── test_hash_calc.py             # v0.2: 雜湊計算測試
+│   │   ├── test_manifest.py              # v0.2: Manifest 測試
 │
-├── config/                              # 設定檔案
-│   └── default_config.json              # ✅ 預設設定檔 (PR#1)
-│
-├── requirements.txt                     # ✅ 生產依賴 (PR#1)
-├── requirements-dev.txt                 # ✅ 開發依賴 (PR#1)
-├── setup.py                            # ✅ 套件安裝設定 (PR#1)
-├── pytest.ini                          # ✅ pytest 設定 (PR#1)
-├── .gitignore                           # ✅ Git 忽略清單 (PR#1)
-├── README.md                            # ✅ 專案說明 (PR#1)
-└── execution-plan.md                    # 完整開發計畫（已存在）
+├── README.md                            # ✅ 更新 v0.2 功能
+└── execution-plan.md                    # 更新 v0.2 計畫
 ```
 
 **符號說明**：

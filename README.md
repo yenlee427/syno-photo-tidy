@@ -19,10 +19,11 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 - 最小可執行入口：`python -m syno_photo_tidy`
 - 基礎單元測試（排除規則、縮圖判定、設定驗證、資料模型）
 
-## v0.2 進行中
+## v0.2 已完成
 - 精確去重（Hash: SHA256/MD5）
 - Manifest.jsonl 完整化（RUN + ACTION 記錄）
 - Dry-run 報告新增重複檔案統計
+- 單元測試與整合測試更新
 
 ## 安全規範（不可違反）
 - 程式**不得**呼叫 delete/unlink/rmtree，且不提供刪除 UI/CLI。
@@ -32,7 +33,7 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 - 若 action plan 為空：顯示 `No changes needed`，只輸出報告，不做任何 move/rename。
 - 所有 planned actions 與 execute 結果都要寫入 `manifest.jsonl`（支援 `.partial` 中斷恢復骨架）。
 
-## 安裝與執行（v0.1）
+## 安裝與執行（v0.2）
 1. 建立虛擬環境並安裝依賴：
    ```bash
    python -m venv venv
@@ -61,8 +62,7 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
   - `thumbnail.min_dimension_px`
 
 ## v0.1 限制
-- 目前已完成 PR #1～PR #5，尚未提供實際搬移與回滾執行。
-- 之後會依照 `docs/execution-plan.md` 依序完成 PR #2～PR #5。
+- 目前尚未提供實際搬移與回滾執行。
 
 ## 開發路線（對照 execution-plan）
 - PR #1：專案初始化與設定系統
@@ -70,4 +70,7 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 - PR #3：GUI 主框架
 - PR #4：檔案掃描引擎
 - PR #5：縮圖偵測與 dry-run
+- PR #6：精確雜湊去重
+- PR #7：Manifest 管理
+- PR #8：Dry-run 報告更新
   - `max_file_kb`
