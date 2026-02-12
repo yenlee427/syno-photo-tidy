@@ -9,6 +9,7 @@ from typing import Iterable
 from ..models import ActionItem, ManifestEntry
 from ..utils import file_ops, path_utils
 from ..utils.logger import get_logger
+from .manifest import generate_op_id, load_manifest_with_status, update_manifest_status
 
 
 @dataclass
@@ -27,17 +28,40 @@ class PlanExecutor:
         plan: Iterable[ActionItem],
         *,
         cancel_event=None,
+        manifest_path: Path | None = None,
     ) -> ExecutionResult:
         executed: list[ManifestEntry] = []
         failed: list[ManifestEntry] = []
         cancelled = False
+        success_op_ids: set[str] = set()
+
+        if manifest_path is not None and manifest_path.exists():
+            for manifest_entry in load_manifest_with_status(manifest_path):
+                if manifest_entry.op_id and manifest_entry.status == "SUCCESS":
+                    success_op_ids.add(manifest_entry.op_id)
 
         for item in plan:
             if cancel_event is not None and cancel_event.is_set():
                 cancelled = True
                 break
 
+            op_id = self._build_op_id(item)
+            if op_id in success_op_ids:
+                continue
+
+            if manifest_path is not None:
+                update_manifest_status(manifest_path, op_id, "STARTED")
+
             entry = self._execute_action(item)
+            entry.op_id = op_id
+            if manifest_path is not None:
+                update_manifest_status(
+                    manifest_path,
+                    op_id,
+                    "SUCCESS" if entry.status in {"MOVED", "COPIED", "RENAMED"} else "FAILED",
+                    error_message=entry.error_message,
+                    result_status=entry.status,
+                )
             if entry.status in {"MOVED", "COPIED", "RENAMED"}:
                 executed.append(entry)
             else:
@@ -48,6 +72,10 @@ class PlanExecutor:
             failed_entries=failed,
             cancelled=cancelled,
         )
+
+    def _build_op_id(self, item: ActionItem) -> str:
+        dst_path = item.dst_path if item.dst_path is not None else item.src_path
+        return generate_op_id(item.action, item.src_path, dst_path, {"reason": item.reason})
 
     def _execute_action(self, item: ActionItem) -> ManifestEntry:
         if item.action in {"MOVE", "ARCHIVE"} and item.dst_path is not None:

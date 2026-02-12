@@ -5,7 +5,7 @@ from __future__ import annotations
 import queue
 import threading
 import tkinter as tk
-from tkinter import filedialog, ttk
+from tkinter import filedialog, messagebox, ttk
 from pathlib import Path
 from typing import Optional
 
@@ -14,8 +14,11 @@ from ..core import (
     ManifestContext,
     Pipeline,
     PlanExecutor,
+    ResumeManager,
     RollbackRunner,
     append_manifest_entries,
+    build_actions_from_manifest,
+    load_manifest_with_status,
 )
 from ..utils import reporting, time_utils
 from ..utils.logger import get_logger
@@ -33,6 +36,7 @@ class MainWindow:
         self.logger = get_logger(self.__class__.__name__)
         self.pipeline = Pipeline(self.config, self.logger)
         self.executor = PlanExecutor(self.logger)
+        self.resume_manager = ResumeManager()
         self.rollback_runner = RollbackRunner(self.logger)
         self.root = tk.Tk()
         self.root.title("syno-photo-tidy")
@@ -44,6 +48,7 @@ class MainWindow:
         self._last_plan = []
         self._last_plan_groups: list[tuple[str, list]] = []
         self._last_report_dir: Optional[Path] = None
+        self._resume_manifest_path: Optional[Path] = None
         self._progress_dialog: Optional[ProgressDialog] = None
 
         self._build_layout()
@@ -83,6 +88,12 @@ class MainWindow:
             button_frame, text="Execute", state="disabled", command=self._on_execute
         )
         self.execute_button.pack(side=tk.LEFT, padx=(8, 0))
+        self.resume_button = ttk.Button(
+            button_frame,
+            text="Resume",
+            command=self._on_resume,
+        )
+        self.resume_button.pack(side=tk.LEFT, padx=(8, 0))
         self.rollback_button = ttk.Button(
             button_frame, text="Rollback Last Run", command=self._on_rollback
         )
@@ -121,6 +132,7 @@ class MainWindow:
         self._is_running = True
         self.cancel_event.clear()
         self.dry_run_button.configure(state="disabled")
+        self.resume_button.configure(state="disabled")
         self._open_progress_dialog(title="Dry-run", allow_cancel=True)
         self.log_viewer.add_line("開始掃描...")
         self.progress_bar.update_progress(0)
@@ -203,11 +215,43 @@ class MainWindow:
         self.cancel_event.clear()
         self.dry_run_button.configure(state="disabled")
         self.execute_button.configure(state="disabled")
+        self.resume_button.configure(state="disabled")
         self._open_progress_dialog(title="Execute", allow_cancel=True)
         self.log_viewer.add_line("開始執行...")
         self.progress_bar.update_progress(0)
         worker = threading.Thread(target=self._run_execute, daemon=True)
         worker.start()
+
+    def _on_resume(self) -> None:
+        if self._is_running:
+            return
+
+        manifest_path = self._select_resume_manifest()
+        if manifest_path is None:
+            return
+
+        validation = self.resume_manager.validate_manifest(manifest_path)
+        if not validation.is_valid:
+            self.log_viewer.add_line("Resume manifest 驗證失敗")
+            for error in validation.errors:
+                self.log_viewer.add_line(f"- {error}")
+            return
+
+        pending_entries = self.resume_manager.load_resume_plan(manifest_path)
+        if not pending_entries:
+            self.log_viewer.add_line("No changes needed")
+            return
+
+        all_entries = load_manifest_with_status(manifest_path)
+        completed = sum(1 for item in all_entries if item.status == "SUCCESS")
+        total = len(all_entries)
+        self.log_viewer.add_line(f"Resume 進度：已完成 {completed}/{total}，待處理 {len(pending_entries)}")
+
+        self._last_plan = build_actions_from_manifest(pending_entries)
+        self._last_plan_groups = [("Resume", self._last_plan)]
+        self._last_report_dir = manifest_path.parent
+        self._resume_manifest_path = manifest_path
+        self._on_execute()
 
     def _on_rollback(self) -> None:
         if self._is_running:
@@ -220,6 +264,7 @@ class MainWindow:
         self.cancel_event.clear()
         self.dry_run_button.configure(state="disabled")
         self.execute_button.configure(state="disabled")
+        self.resume_button.configure(state="disabled")
         self.rollback_button.configure(state="disabled")
         self._open_progress_dialog(title="Rollback", allow_cancel=False)
         self.log_viewer.add_line("開始回滾...")
@@ -257,11 +302,21 @@ class MainWindow:
         executed_entries = []
         failed_entries = []
         cancelled = False
+        manifest_path: Path | None = None
+        if self._resume_manifest_path is not None:
+            manifest_path = self._resume_manifest_path
+        elif self._last_report_dir is not None:
+            manifest_path = self._last_report_dir / "manifest.jsonl"
+
         for label, plan in self._last_plan_groups:
             if not plan:
                 continue
             self.queue.put({"type": "stage", "message": f"階段: {label}..."})
-            result = self.executor.execute_plan(plan, cancel_event=self.cancel_event)
+            result = self.executor.execute_plan(
+                plan,
+                cancel_event=self.cancel_event,
+                manifest_path=manifest_path,
+            )
             executed_entries.extend(result.executed_entries)
             failed_entries.extend(result.failed_entries)
             if result.cancelled:
@@ -269,7 +324,7 @@ class MainWindow:
                 break
 
         entries = executed_entries + failed_entries
-        if self._last_report_dir is not None and entries:
+        if self._last_report_dir is not None and entries and manifest_path is None:
             manifest_path = self._last_report_dir / "manifest.jsonl"
             append_manifest_entries(manifest_path, entries, logger=self.logger)
 
@@ -286,6 +341,7 @@ class MainWindow:
         self.queue.put({"type": "enable_execute", "value": False})
         self.queue.put({"type": "progress", "value": 100})
         self.queue.put({"type": "stage", "message": "階段: 完成"})
+        self._resume_manifest_path = None
         self.queue.put({"type": "done"})
 
     def _poll_queue(self) -> None:
@@ -314,6 +370,7 @@ class MainWindow:
                 elif item_type == "done":
                     self._is_running = False
                     self.dry_run_button.configure(state="normal")
+                    self.resume_button.configure(state="normal")
                     self.rollback_button.configure(state="normal")
                     self._close_progress_dialog()
         except queue.Empty:
@@ -359,6 +416,29 @@ class MainWindow:
         if dialog.selection is None:
             return None
         return dialog.selection.processed_dir
+
+    def _select_resume_manifest(self) -> Optional[Path]:
+        root = self._default_processed_root()
+        latest_manifest = None
+        if root is not None and root.exists():
+            latest_manifest = self.resume_manager.find_latest_manifest(root)
+
+        if latest_manifest is not None:
+            use_latest = messagebox.askyesno(
+                "Resume",
+                f"是否使用最近一次 manifest？\n{latest_manifest}",
+                parent=self.root,
+            )
+            if use_latest:
+                return latest_manifest
+
+        selected = filedialog.askopenfilename(
+            title="選擇要續跑的 manifest.jsonl",
+            filetypes=[("JSONL", "manifest*.jsonl"), ("All files", "*.*")],
+        )
+        if not selected:
+            return None
+        return Path(selected)
 
     def _default_processed_root(self) -> Optional[Path]:
         output_value = self.output_selector.path_var.get().strip()

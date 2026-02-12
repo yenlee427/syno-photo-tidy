@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from datetime import datetime
@@ -10,6 +11,111 @@ from typing import Iterable
 
 from ..models import ManifestEntry
 from ..utils.logger import get_logger
+
+
+def _normalize_path_for_id(path: Path | str) -> str:
+    return str(path).replace("\\", "/")
+
+
+def generate_op_id(
+    action: str,
+    src_path: Path,
+    dst_path: Path,
+    extra: dict | None = None,
+) -> str:
+    payload = {
+        "action": action,
+        "src": _normalize_path_for_id(src_path),
+        "dst": _normalize_path_for_id(dst_path),
+        "extra": extra or {},
+    }
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return f"op_{digest[:16]}"
+
+
+def update_manifest_status(
+    manifest_path: Path,
+    op_id: str,
+    status: str,
+    *,
+    error_message: str | None = None,
+    retry_count: int | None = None,
+    elapsed_time_sec: float | None = None,
+    result_status: str | None = None,
+) -> bool:
+    records = read_manifest_records(manifest_path)
+    updated = False
+
+    for record in records:
+        if record.get("record_type") != "ACTION":
+            continue
+        if record.get("op_id") != op_id:
+            continue
+
+        record["status"] = status
+        if error_message is not None:
+            record["error_message"] = error_message
+        if retry_count is not None:
+            record["retry_count"] = retry_count
+        if elapsed_time_sec is not None:
+            record["elapsed_time_sec"] = elapsed_time_sec
+        if result_status is not None:
+            record["result_status"] = result_status
+        updated = True
+        break
+
+    if not updated:
+        return False
+
+    temp_path = manifest_path.with_suffix(".jsonl.tmp")
+    with temp_path.open("w", encoding="utf-8") as handle:
+        for record in records:
+            handle.write(json.dumps(record, ensure_ascii=True) + "\n")
+    temp_path.replace(manifest_path)
+    return True
+
+
+def load_manifest_with_status(manifest_path: Path) -> list[ManifestEntry]:
+    records = read_manifest_records(manifest_path)
+    entries: list[ManifestEntry] = []
+
+    for record in records:
+        if record.get("record_type") != "ACTION":
+            continue
+
+        entries.append(
+            ManifestEntry(
+                op_id=str(record.get("op_id")) if record.get("op_id") else None,
+                action=str(record.get("action", "")),
+                src_path=str(record.get("src_path", "")),
+                dst_path=str(record.get("dst_path")) if record.get("dst_path") else None,
+                status=str(record.get("status", "")),
+                reason=str(record.get("reason")) if record.get("reason") else None,
+                error_code=str(record.get("error_code")) if record.get("error_code") else None,
+                error_message=str(record.get("error_message")) if record.get("error_message") else None,
+                retry_count=int(record.get("retry_count", 0) or 0),
+                elapsed_time_sec=float(record.get("elapsed_time_sec", 0.0) or 0.0),
+                size_bytes=int(record.get("size_bytes")) if record.get("size_bytes") is not None else None,
+                resolution=tuple(record.get("resolution")) if record.get("resolution") else None,
+                hash_md5=str(record.get("hash_md5")) if record.get("hash_md5") else None,
+                hash_sha256=str(record.get("hash_sha256")) if record.get("hash_sha256") else None,
+                timestamp_locked=str(record.get("timestamp_locked")) if record.get("timestamp_locked") else None,
+                timestamp_source=str(record.get("timestamp_source")) if record.get("timestamp_source") else None,
+                file_type=str(record.get("file_type")) if record.get("file_type") else None,
+                is_live_pair=bool(record.get("is_live_pair", False)),
+                pair_id=str(record.get("pair_id")) if record.get("pair_id") else None,
+                pair_confidence=str(record.get("pair_confidence")) if record.get("pair_confidence") else None,
+                is_screenshot=bool(record.get("is_screenshot", False)),
+                screenshot_evidence=(
+                    str(record.get("screenshot_evidence"))
+                    if record.get("screenshot_evidence")
+                    else None
+                ),
+            )
+        )
+
+    return entries
 
 
 @dataclass

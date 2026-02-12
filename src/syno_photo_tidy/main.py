@@ -5,7 +5,7 @@ from pathlib import Path
 
 from . import __version__
 from .config import ConfigManager
-from .core import ManifestContext, Pipeline, PlanExecutor, RollbackRunner, append_manifest_entries
+from .core import ManifestContext, Pipeline, PlanExecutor, RollbackRunner
 from .gui import MainWindow
 from .utils import reporting, time_utils
 
@@ -122,19 +122,14 @@ def _run_execute(args: argparse.Namespace, config: ConfigManager) -> None:
     executor = PlanExecutor()
     executed_entries = []
     failed_entries = []
+    manifest_path = pipeline_result.report_dir / "manifest.jsonl"
     for label, plan in pipeline_result.plan_groups:
         if not plan:
             continue
         print(f"Executing: {label}")
-        result = executor.execute_plan(plan)
+        result = executor.execute_plan(plan, manifest_path=manifest_path)
         executed_entries.extend(result.executed_entries)
         failed_entries.extend(result.failed_entries)
-
-    if executed_entries or failed_entries:
-        append_manifest_entries(
-            pipeline_result.report_dir / "manifest.jsonl",
-            executed_entries + failed_entries,
-        )
 
     print(f"Execute done. Success: {len(executed_entries)}, Failed: {len(failed_entries)}")
 

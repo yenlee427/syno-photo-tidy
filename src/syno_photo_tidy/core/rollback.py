@@ -34,7 +34,7 @@ class RollbackRunner:
             record
             for record in records
             if record.get("record_type") == "ACTION"
-            and record.get("status") in {"MOVED", "COPIED", "RENAMED"}
+            and record.get("status") in {"MOVED", "COPIED", "RENAMED", "SUCCESS"}
         ]
 
         rollback_entries: list[ManifestEntry] = []
@@ -62,6 +62,7 @@ class RollbackRunner:
         src_path = _to_path(record.get("src_path"))
         dst_path = _to_path(record.get("dst_path"))
         status = str(record.get("status"))
+        result_status = str(record.get("result_status")) if record.get("result_status") else status
         reason = str(record.get("reason")) if record.get("reason") else None
 
         if src_path is None or dst_path is None:
@@ -69,7 +70,7 @@ class RollbackRunner:
         if not dst_path.exists():
             return self._build_entry("ROLLBACK_SKIPPED", dst_path, src_path, reason)
 
-        if status == "COPIED":
+        if result_status == "COPIED":
             trash_path = self._build_rollback_path(
                 processed_dir / "ROLLBACK_TRASH",
                 dst_path,
