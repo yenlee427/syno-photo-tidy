@@ -11,6 +11,59 @@ def validate_config(config: dict[str, Any]) -> list[str]:
     def add_error(path: str, message: str) -> None:
         errors.append(f"{path}: {message}")
 
+    retry = config.get("retry", {})
+    max_retries = retry.get("max_retries", 5)
+    backoff_base_sec = retry.get("backoff_base_sec", 1.0)
+    backoff_cap_sec = retry.get("backoff_cap_sec", 30.0)
+    if not isinstance(max_retries, int) or max_retries < 0:
+        add_error("retry.max_retries", "必須是大於等於 0 的整數")
+    if not isinstance(backoff_base_sec, (int, float)) or backoff_base_sec <= 0:
+        add_error("retry.backoff_base_sec", "必須是大於 0 的數值")
+    if not isinstance(backoff_cap_sec, (int, float)) or backoff_cap_sec <= 0:
+        add_error("retry.backoff_cap_sec", "必須是大於 0 的數值")
+    if (
+        isinstance(backoff_base_sec, (int, float))
+        and isinstance(backoff_cap_sec, (int, float))
+        and backoff_base_sec > backoff_cap_sec
+    ):
+        add_error("retry", "backoff_base_sec 不可大於 backoff_cap_sec")
+
+    file_extensions = config.get("file_extensions", {})
+    image_exts = file_extensions.get("image", [])
+    video_exts = file_extensions.get("video", [])
+    if not isinstance(image_exts, list) or any(not isinstance(item, str) for item in image_exts):
+        add_error("file_extensions.image", "必須是字串清單")
+    if not isinstance(video_exts, list) or any(not isinstance(item, str) for item in video_exts):
+        add_error("file_extensions.video", "必須是字串清單")
+
+    move_other_to_keep = config.get("move_other_to_keep", False)
+    if not isinstance(move_other_to_keep, bool):
+        add_error("move_other_to_keep", "必須是布林值")
+
+    enable_rename = config.get("enable_rename", False)
+    if not isinstance(enable_rename, bool):
+        add_error("enable_rename", "必須是布林值")
+
+    group_screenshots = config.get("group_screenshots", False)
+    if not isinstance(group_screenshots, bool):
+        add_error("group_screenshots", "必須是布林值")
+    screenshots_dest = config.get("screenshots_dest", "")
+    if not isinstance(screenshots_dest, str) or not screenshots_dest.strip():
+        add_error("screenshots_dest", "必須是非空字串")
+    screenshot_detection_mode = config.get("screenshot_detection_mode", "strict")
+    if screenshot_detection_mode not in {"strict", "relaxed"}:
+        add_error("screenshot_detection_mode", "必須是 strict 或 relaxed")
+    screenshot_filename_patterns = config.get("screenshot_filename_patterns", [])
+    if not isinstance(screenshot_filename_patterns, list) or any(
+        not isinstance(item, str) for item in screenshot_filename_patterns
+    ):
+        add_error("screenshot_filename_patterns", "必須是字串清單")
+    screenshot_metadata_keywords = config.get("screenshot_metadata_keywords", [])
+    if not isinstance(screenshot_metadata_keywords, list) or any(
+        not isinstance(item, str) for item in screenshot_metadata_keywords
+    ):
+        add_error("screenshot_metadata_keywords", "必須是字串清單")
+
     hash_config = config.get("hash", {})
     algorithms = hash_config.get("algorithms")
     chunk_size_kb = hash_config.get("chunk_size_kb")

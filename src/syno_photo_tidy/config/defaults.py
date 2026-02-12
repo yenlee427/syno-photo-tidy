@@ -1,6 +1,22 @@
 """預設設定值。"""
 
 DEFAULT_CONFIG = {
+    "retry": {
+        "max_retries": 5,
+        "backoff_base_sec": 1.0,
+        "backoff_cap_sec": 30.0,
+    },
+    "file_extensions": {
+        "image": [".jpg", ".jpeg", ".png", ".heic", ".heif", ".tif", ".tiff", ".bmp", ".gif"],
+        "video": [".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".m4v", ".3gp"],
+    },
+    "move_other_to_keep": False,
+    "enable_rename": False,
+    "group_screenshots": False,
+    "screenshots_dest": "KEEP/Screenshots/{YYYY}-{MM}/",
+    "screenshot_detection_mode": "strict",
+    "screenshot_filename_patterns": ["*Screenshot*", "*螢幕截圖*"],
+    "screenshot_metadata_keywords": ["screenshot"],
     "hash": {
         "algorithms": ["sha256", "md5"],
         "chunk_size_kb": 1024,

@@ -7,8 +7,11 @@ def test_config_load_defaults() -> None:
     assert config.get("thumbnail.max_size_kb") == 120
     assert config.get("rename.pattern") == "{date}_{time}"
     assert config.get("rename.enabled") is True
+    assert config.get("enable_rename") is False
     assert config.get("archive.enabled") is True
     assert config.get("hash.parallel_workers") == 4
+    assert ".jpg" in config.get("file_extensions.image")
+    assert ".mp4" in config.get("file_extensions.video")
 
 
 def test_config_validation() -> None:
