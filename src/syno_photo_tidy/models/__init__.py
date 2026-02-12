@@ -3,6 +3,7 @@
 from .file_info import FileInfo
 from .action_item import ActionItem
 from .error_record import ErrorLevel, ProcessError
+from .live_photo_pair import LivePhotoPair
 from .manifest_entry import ManifestEntry
 
 __all__ = [
@@ -10,5 +11,6 @@ __all__ = [
     "ActionItem",
     "ErrorLevel",
     "ProcessError",
+    "LivePhotoPair",
     "ManifestEntry",
 ]

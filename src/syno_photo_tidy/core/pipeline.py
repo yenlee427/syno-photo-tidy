@@ -13,8 +13,10 @@ from ..utils.logger import get_logger
 from .action_planner import ActionPlanner
 from .archiver import Archiver
 from .exact_deduper import ExactDeduper
+from .live_photo_matcher import LivePhotoMatcher
 from .renamer import Renamer
 from .scanner import FileScanner
+from .screenshot_detector import ScreenshotDetector
 from .thumbnail_detector import ThumbnailDetector
 from .visual_deduper import VisualDeduper
 
@@ -35,7 +37,9 @@ class Pipeline:
         self.thumbnail_detector = ThumbnailDetector(config, self.logger)
         self.exact_deduper = ExactDeduper(config, self.logger)
         self.visual_deduper = VisualDeduper(config, self.logger)
+        self.live_photo_matcher = LivePhotoMatcher()
         self.renamer = Renamer(config, self.logger)
+        self.screenshot_detector = ScreenshotDetector(config, self.logger)
         self.archiver = Archiver(config, self.logger)
         self.action_planner = ActionPlanner(config, self.logger)
 
@@ -137,13 +141,29 @@ class Pipeline:
             progress_callback(min(99, total_weight))
         log_callback(f"偵測到 {len(visual_duplicates)} 個相似重複檔案")
 
+        stage_callback("階段: Live Photo matching...")
+        live_pairs = self.live_photo_matcher.find_live_pairs(keepers)
+        log_callback(f"偵測到 {len(live_pairs)} 組 Live Photo 配對")
+
+        stage_callback("階段: Screenshot detection...")
+        screenshot_count = 0
+        for item in keepers:
+            is_screenshot, evidence = self.screenshot_detector.is_screenshot(item)
+            item.is_screenshot = is_screenshot
+            item.screenshot_evidence = evidence
+            if is_screenshot:
+                screenshot_count += 1
+        log_callback(f"偵測到 {screenshot_count} 個螢幕截圖")
+
+        renamable_keepers = [item for item in keepers if not item.is_screenshot]
+
         stage_callback("階段: Renaming...")
         rename_result = self.renamer.generate_plan(
-            keepers,
+            renamable_keepers,
             progress_callback=lambda count: update_weighted_progress(
                 weights["rename"],
                 count,
-                len(keepers),
+                len(renamable_keepers),
             ),
         )
         log_callback(f"計畫重新命名 {len(rename_result.plan)} 個檔案")
