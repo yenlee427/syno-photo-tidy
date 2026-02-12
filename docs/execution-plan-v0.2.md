@@ -23,7 +23,7 @@
 
 ### 2. Resume 續跑規則
 - manifest.jsonl 記錄狀態：`PLANNED` → `STARTED` → `SUCCESS` | `FAILED`
-- 每個操作必須有唯一 `op_id`（格式：`{timestamp}_{sequence}_{hash_prefix}`）
+- 每個操作必須有唯一 `op_id`（以操作內容計算 SHA-256，可重現）
 - Resume 時自動跳過 `status=SUCCESS` 的操作
 - Resume 目標選擇：
   - **預設**：自動選擇輸出根目錄下「最近一次」的 `Processed_*/REPORT/manifest*.jsonl`
@@ -69,6 +69,16 @@
   - 所有操作寫 manifest，支援 Rollback/Resume
 - **證據記錄**：
   - report.csv 與 manifest.jsonl 必須記錄 `evidence`/`reason`（例如 metadata 欄位或命中規則）
+
+
+### 7. 命名衝突處理規則
+- **原則**：任何 MOVE/RENAME 都 **不得覆蓋既有檔案**（no overwrite）
+- **衝突定義**：目的地路徑已存在檔案（同名），或計畫中的多個動作會產生相同目的地名稱
+- **處理策略（需一致且可重現）**：
+  1. 先判定「是否為同檔」：若目的地已存在且（size + hash）相同 → 視為 **已完成**，本次動作標記為 `SKIP_ALREADY_DONE`
+  2. 若不同檔 → 透過 `resolve_name_conflict()` 產生不重名的新檔名（例如在檔名末尾加 `_0001`, `_0002`…），並在 report/manifest 記錄 `conflict_resolved=true`
+  3. 若仍無法安全處理（例如權限/路徑長度）→ 將該操作寫入 manifest（status=FAILED）並繼續處理下一檔
+- **可回滾要求**：衝突處理後的實際目的地路徑必須寫入 manifest，Rollback 以該路徑為準
 
 ---
 
@@ -125,53 +135,56 @@ class OperationResult:
     retry_count: int = 0
     elapsed_time: float = 0.0
 
-def safe_op(max_retries: int = 5, 
-            backoff_base: float = 1.0,
-            exceptions: Tuple = (OSError, PermissionError)):
+def safe_op(*,
+            config,
+            max_retries: Optional[int] = None,
+            backoff_base_sec: Optional[float] = None,
+            backoff_cap_sec: Optional[float] = None,
+            exceptions: Optional[Tuple] = None):
     """
-    裝飾器：包裝檔案操作，提供重試與退避機制
-    
-    Args:
-        max_retries: 最大重試次數（預設 5）
-        backoff_base: 退避基數秒數（預設 1.0，指數增長）
-        exceptions: 需捕捉的例外類型
-    
+    裝飾器：包裝檔案操作，提供重試與退避機制（NAS/SMB 容錯）
+
+    參數來源優先順序：
+      1) 呼叫端顯式傳入（max_retries/backoff_*）
+      2) config 設定（retry.*）
+      3) 預設值（max_retries=5, backoff_base_sec=1.0, backoff_cap_sec=30.0）
+
+    建議的 config keys：
+      - retry.max_retries
+      - retry.backoff_base_sec
+      - retry.backoff_cap_sec
+      - retry.retryable_exceptions
+
     Returns:
-        OperationResult 物件
+        OperationResult
     """
+    resolved_max = max_retries if max_retries is not None else config.get("retry.max_retries", 5)
+    resolved_base = backoff_base_sec if backoff_base_sec is not None else config.get("retry.backoff_base_sec", 1.0)
+    resolved_cap = backoff_cap_sec if backoff_cap_sec is not None else config.get("retry.backoff_cap_sec", 30.0)
+    resolved_exceptions = exceptions if exceptions is not None else (OSError, PermissionError)
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs) -> OperationResult:
             start_time = time.time()
             last_error = None
-            
-            for attempt in range(max_retries + 1):
+
+            for attempt in range(resolved_max + 1):
                 try:
-                    result = func(*args, **kwargs)
+                    func(*args, **kwargs)
                     elapsed = time.time() - start_time
-                    return OperationResult(
-                        success=True,
-                        retry_count=attempt,
-                        elapsed_time=elapsed
-                    )
-                except exceptions as e:
+                    return OperationResult(success=True, retry_count=attempt, elapsed_time=elapsed)
+                except resolved_exceptions as e:
                     last_error = e
-                    if attempt < max_retries:
-                        wait_time = backoff_base * (2 ** attempt)
-                        logger.warning(
-                            f"Retry {attempt+1}/{max_retries} after {wait_time}s: {e}"
-                        )
+                    if attempt < resolved_max:
+                        wait_time = min(resolved_base * (2 ** attempt), resolved_cap)
+                        logger.warning(f"Retry {attempt+1}/{resolved_max} after {wait_time}s: {e}")
                         time.sleep(wait_time)
                     else:
-                        logger.error(f"Operation failed after {max_retries} retries: {e}")
-            
+                        logger.error(f"Operation failed after {resolved_max} retries: {e}")
+
             elapsed = time.time() - start_time
-            return OperationResult(
-                success=False,
-                error_message=str(last_error),
-                retry_count=max_retries,
-                elapsed_time=elapsed
-            )
+            return OperationResult(success=False, error_message=str(last_error), retry_count=resolved_max, elapsed_time=elapsed)
         return wrapper
     return decorator
 ```
@@ -188,7 +201,7 @@ def safe_op(max_retries: int = 5,
   - 新增 `retry_count: int` 欄位
   - 新增 `elapsed_time_sec: float` 欄位
 - [ ] 實作 `core/manifest.py` 新增函式：
-  - `generate_op_id() -> str` - 產生唯一 op_id
+  - `generate_op_id(action, src_path, dst_path, extra) -> str` - 產生可重現的 op_id（SHA-256）
   - `update_manifest_status(op_id, status, ...)` - 更新特定操作狀態
   - `load_manifest_with_status(path) -> List[ManifestEntry]` - 讀取並解析狀態
 - [ ] 實作 manifest.jsonl 寫入邏輯：
@@ -201,13 +214,23 @@ def safe_op(max_retries: int = 5,
 from syno_photo_tidy.core.manifest import generate_op_id, update_manifest_status
 from syno_photo_tidy.models import ManifestEntry
 
-# 測試 op_id 產生（唯一性）
-op_ids = [generate_op_id() for _ in range(100)]
-assert len(set(op_ids)) == 100  # 確保唯一
+# 測試 op_id 產生（唯一性 + 可重現）
+ops = [
+    ("MOVE", Path("a.jpg"), Path("KEEP/a.jpg"), {}),
+    ("MOVE", Path("b.jpg"), Path("KEEP/b.jpg"), {}),
+    ("RENAME", Path("c.jpg"), Path("KEEP/c.jpg"), {"new_name": "IMG_20240101_000000_0001.jpg"}),
+]
+op_ids = [generate_op_id(a, s, d, x) for (a, s, d, x) in ops]
+assert len(set(op_ids)) == len(ops)  # 不同操作 → 不同 op_id
+
+# 同一個操作 → op_id 必須相同
+same1 = generate_op_id("MOVE", Path("a.jpg"), Path("KEEP/a.jpg"), {})
+same2 = generate_op_id("MOVE", Path("a.jpg"), Path("KEEP/a.jpg"), {})
+assert same1 == same2
 
 # 測試狀態更新
 entry = ManifestEntry(
-    op_id="20260212_001_abc123",
+    op_id="op_3f4a8c2d9a10b4c1",
     action="MOVE",
     src_path=Path("a.jpg"),
     dst_path=Path("KEEP/a.jpg"),
@@ -226,18 +249,34 @@ assert 'op_id' in manifest_dict
 
 **op_id 格式規範**：
 ```python
-def generate_op_id() -> str:
+def generate_op_id(action: str, src_path: Path, dst_path: Path, extra: dict | None = None) -> str:
     """
-    產生唯一操作 ID
-    格式: {timestamp}_{sequence}_{hash_prefix}
-    範例: 20260212_143025_001_a3b5c7
+    產生可重現的操作 ID（避免時間戳造成不穩定）
+
+    核心原則：
+    - op_id 應只依賴「操作內容」而非當下時間
+    - 對同一個操作（相同 action/src/dst/關鍵參數），多次計算必須得到相同結果
+
+    建議 canonical payload（需先做路徑正規化）：
+      {
+        "action": "MOVE" | "RENAME" | ...,
+        "src": "<normalized_src>",
+        "dst": "<normalized_dst>",
+        "extra": { ... }  # 例如 new_name、pair_id、rename_base 等（可選）
+      }
+
+    回傳格式：
+      op_<sha256 前 16 碼>
     """
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    sequence = str(uuid.uuid4().int)[:3]  # 3 位序號
-    hash_prefix = hashlib.sha256(
-        f"{timestamp}_{sequence}".encode()
-    ).hexdigest()[:6]
-    return f"{timestamp}_{sequence}_{hash_prefix}"
+    payload = {
+        "action": action,
+        "src": str(src_path).replace("\", "/"),
+        "dst": str(dst_path).replace("\", "/"),
+        "extra": extra or {}
+    }
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return f"op_{digest[:16]}"
 ```
 
 ---
@@ -249,6 +288,8 @@ def generate_op_id() -> str:
   - `find_latest_manifest(output_root) -> Optional[Path]` - 自動尋找最近的 manifest
   - `load_resume_plan(manifest_path) -> List[ManifestEntry]` - 載入並過濾待續操作
   - `is_resumable(manifest_path) -> bool` - 檢查 manifest 是否可續跑
+  - `validate_manifest(manifest_path) -> ValidationResult` - 驗證 manifest 完整性（解析/欄位/重複 op_id）
+- [ ] 新增 `validate_manifest(manifest_path) -> ValidationResult`：驗證 jsonl 可解析、必要欄位齊全、op_id 不重複、status 合法
 - [ ] 更新 `core/executor.py`：
   - 執行前檢查 `status`，跳過 `SUCCESS` 的操作
   - 執行時先更新為 `STARTED`，完成後更新為 `SUCCESS`/`FAILED`
@@ -272,6 +313,10 @@ assert all(entry.status != "SUCCESS" for entry in plan)
 
 # 測試可續跑檢查
 assert manager.is_resumable(latest) == True
+
+# 測試 manifest 驗證
+validation = manager.validate_manifest(latest)
+assert validation.is_valid == True
 
 # 測試空 plan（全部已完成）
 empty_plan = []
@@ -498,6 +543,7 @@ assert any(
   - `find_live_pairs(files) -> List[LivePhotoPair]` - 配對邏輯
   - `is_high_confidence_pair(image, video) -> bool` - 高信心判定
   - `calculate_pair_id(image, video) -> str` - 配對 ID 產生
+- [ ] 配對策略改為「兩階段最佳匹配」（最小時間差，一對一）
 - [ ] 更新 `models/file_info.py`：
   - 新增 `is_live_pair: bool` 欄位（預設 false）
   - 新增 `pair_id: Optional[str]` 欄位
@@ -552,73 +598,77 @@ assert pairs1 == pairs2
 ```python
 def find_live_pairs(self, files: List[FileInfo]) -> List[LivePhotoPair]:
     """
-    Live Photo 配對邏輯
-    
+    Live Photo 配對邏輯（最佳匹配版）
+
     高信心配對條件（ALL 必須滿足）：
     1. 同資料夾（parent directory 相同）
     2. timestamp_locked 差異 <= 2 秒
     3. image.ext in [.heic, .jpg, .jpeg]
     4. video.ext in [.mov, .mp4]
-    
+
+    兩階段最佳匹配（避免「匹到第一個就 break」造成錯配）：
+    - Phase A：枚舉所有候選配對（candidate pairs），計算 time_diff_sec
+    - Phase B：依 time_diff_sec 由小到大排序，採一對一 greedy matching
+             （每張 image、每段 video 最多被配對一次）
+
     排序規則（確保穩定性）：
-    - timestamp_locked ASC
-    - original_filename ASC
-    - path ASC
-    
-    Returns:
-        List[LivePhotoPair] - 配對結果清單
+    - 先以 folder path 排序處理
+    - candidate sort key：time_diff_sec ASC → image.path.stem ASC → video.path.stem ASC → path ASC
     """
-    # 1. 依資料夾分組
     folder_groups = defaultdict(list)
     for f in files:
         folder_groups[f.path.parent].append(f)
-    
-    pairs = []
-    
-    for folder, folder_files in folder_groups.items():
-        # 2. 分離 IMAGE 與 VIDEO
-        images = [f for f in folder_files if f.file_type == "IMAGE"]
-        videos = [f for f in folder_files if f.file_type == "VIDEO"]
-        
-        # 3. 排序（確保穩定）
+
+    pairs: list[LivePhotoPair] = []
+
+    for folder in sorted(folder_groups.keys(), key=lambda p: str(p)):
+        folder_files = folder_groups[folder]
+        images = [f for f in folder_files if f.file_type == "IMAGE" and f.ext.lower() in [".heic", ".jpg", ".jpeg"]]
+        videos = [f for f in folder_files if f.file_type == "VIDEO" and f.ext.lower() in [".mov", ".mp4"]]
+
+        # 穩定排序（避免輸入順序影響結果）
         images.sort(key=lambda f: (f.timestamp_locked, f.path.stem, str(f.path)))
         videos.sort(key=lambda f: (f.timestamp_locked, f.path.stem, str(f.path)))
-        
-        # 4. 配對
+
+        # Phase A：建立候選清單
+        candidates = []
         for img in images:
-            if img.ext.lower() not in ['.heic', '.jpg', '.jpeg']:
-                continue
-                
             for vid in videos:
-                if vid.ext.lower() not in ['.mov', '.mp4']:
-                    continue
-                
-                # 檢查時間差
-                time_diff = abs(
-                    parse_timestamp(img.timestamp_locked) - 
-                    parse_timestamp(vid.timestamp_locked)
-                )
-                
+                time_diff = abs(parse_timestamp(img.timestamp_locked) - parse_timestamp(vid.timestamp_locked))
                 if time_diff <= timedelta(seconds=2):
-                    pair_id = self.calculate_pair_id(img, vid)
-                    
-                    # 標記檔案
-                    img.is_live_pair = True
-                    img.pair_id = pair_id
-                    img.pair_confidence = "high"
-                    
-                    vid.is_live_pair = True
-                    vid.pair_id = pair_id
-                    vid.pair_confidence = "high"
-                    
-                    pairs.append(LivePhotoPair(
-                        image=img,
-                        video=vid,
-                        pair_id=pair_id,
-                        confidence="high"
-                    ))
-                    break  # 一對一配對
-    
+                    candidates.append((float(time_diff.total_seconds()), img, vid))
+
+        # Phase B：最佳匹配（最小時間差優先）
+        candidates.sort(key=lambda t: (t[0], t[1].path.stem, t[2].path.stem, str(t[1].path), str(t[2].path)))
+
+        used_images = set()
+        used_videos = set()
+
+        for diff_sec, img, vid in candidates:
+            if img.path in used_images or vid.path in used_videos:
+                continue
+
+            pair_id = self.calculate_pair_id(img, vid)
+
+            img.is_live_pair = True
+            img.pair_id = pair_id
+            img.pair_confidence = "high"
+
+            vid.is_live_pair = True
+            vid.pair_id = pair_id
+            vid.pair_confidence = "high"
+
+            pairs.append(LivePhotoPair(
+                image=img,
+                video=vid,
+                pair_id=pair_id,
+                confidence="high",
+                time_diff_sec=diff_sec
+            ))
+
+            used_images.add(img.path)
+            used_videos.add(vid.path)
+
     return pairs
 ```
 
@@ -631,6 +681,7 @@ def find_live_pairs(self, files: List[FileInfo]) -> List[LivePhotoPair]:
   - 實作 Live Photo 配對檔案共用序號邏輯
   - 確保同一組使用相同 `yyyyMMdd_HHmmss_####` 基底
   - 照片與影片都使用 `IMG_` 前綴（Synology 排序一致）
+- [ ] 新增 `resolve_name_conflict(dst_dir, filename) -> Path`：處理 RENAME/MOVE 目的地同名衝突（不覆蓋，改用 `_0001` 後綴），並確保結果可重現
 - [ ] 實作序號分配演算法：
   - 全域計數器（依 timestamp 排序）
   - Live Photo 配對共享序號
@@ -678,6 +729,12 @@ assert renamed_lone[0].new_name == "VID_20240715_150000_0002.mp4"
 renamed1 = renamer.generate_rename_plan(test_files)
 renamed2 = renamer.generate_rename_plan(test_files)
 assert renamed1 == renamed2
+
+# 測試命名衝突（目的地已存在時不覆蓋）
+# - 假設 KEEP/ 內已存在同名檔
+# - 期望 resolve_name_conflict() 產生不重名名稱（例如加 _0001）
+# - 並將實際 new_name/dst_path 寫入 manifest
+
 ```
 
 **命名規則總覽**（v0.2.2 版本）：
@@ -781,7 +838,7 @@ assert len(set(a.rename_base for a in live_photo_actions)) == 1
 **工作內容**：
 - [ ] 實作 `core/screenshot_detector.py`：
   - `is_screenshot(file_info, mode) -> Tuple[bool, str]` - 判定函式
-  - `detect_from_metadata(file_info) -> Optional[str]` - metadata 檢測
+  - `detect_from_metadata(file_info) -> Optional[str]` - metadata 檢測（含 EXIF、PNG tEXt/iTXt chunks、XMP）
   - `detect_from_filename(file_info) -> Optional[str]` - 檔名規則檢測
 - [ ] 更新 `models/file_info.py`：
   - 新增 `is_screenshot: bool` 欄位（預設 false）
@@ -819,35 +876,53 @@ assert is_ss == True
 assert "filename" in evidence.lower()
 ```
 
-**metadata 檢測邏輯**（優先可靠性）：
+**metadata 檢測邏輯**（優先可靠性）：  
+> 目標：strict 模式下「只靠 metadata」也能涵蓋 EXIF 影像與部分 PNG（含 Windows 產出的 PNG 若帶有 tEXt/iTXt/XMP）
+
 ```python
 def detect_from_metadata(self, file_info: FileInfo) -> Optional[str]:
     """
-    從 metadata 判定是否為螢幕截圖
-    
-    檢查項目：
-    1. EXIF UserComment 包含 "screenshot"
-    2. 檔案屬性標記（Windows 可能有）
-    3. 圖片軟體標記（例如 macOS Screenshot.app）
-    
-    Returns:
-        Optional[str]: 若為截圖，回傳證據字串；否則 None
+    從 metadata 判定是否為螢幕截圖（strict 模式核心）
+
+    支援來源：
+    1) EXIF（JPEG/HEIC 等）
+    2) PNG tEXt / iTXt chunks（Pillow 可從 img.info 取得）
+    3) PNG 內嵌 XMP（常見於 iTXt 或特定 key，例如 'XML:com.adobe.xmp'）
+
+    判定方式（避免臆測，採「關鍵字命中」）：
+    - 將可取得的文字型 metadata 彙整成 text_blob
+    - 以 config.screenshot_metadata_keywords（預設包含 'screenshot'）做 case-insensitive 搜尋
+    - 命中則回傳 evidence 字串，否則回傳 None
     """
-    evidence = []
-    
-    # 檢查 EXIF
-    if file_info.exif_data:
-        user_comment = file_info.exif_data.get("UserComment", "")
-        if "screenshot" in user_comment.lower():
-            evidence.append("EXIF:UserComment=screenshot")
-        
-        software = file_info.exif_data.get("Software", "")
-        if "screenshot" in software.lower():
-            evidence.append(f"EXIF:Software={software}")
-    
-    # TODO: 檢查其他 metadata 來源
-    
-    return "; ".join(evidence) if evidence else None
+    keywords = self.config.get("screenshot_metadata_keywords", ["screenshot"])
+    text_parts = []
+
+    # 1) EXIF
+    if getattr(file_info, "exif_data", None):
+        for k, v in file_info.exif_data.items():
+            if v:
+                text_parts.append(f"{k}={v}")
+
+    # 2) PNG chunks / XMP（需要能從檔案讀取；示意用 Pillow）
+    if file_info.ext.lower() == ".png":
+        try:
+            from PIL import Image
+            img = Image.open(file_info.path)
+            info = getattr(img, "info", {}) or {}
+            for k, v in info.items():
+                if v:
+                    text_parts.append(f"{k}={v}")
+        except Exception:
+            # strict 模式下：讀不到就視為無法以 metadata 判定
+            pass
+
+    text_blob = " | ".join([str(x) for x in text_parts]).lower()
+
+    for kw in keywords:
+        if kw.lower() in text_blob:
+            return f"metadata_keyword_match:{kw}"
+
+    return None
 ```
 
 ---
@@ -1070,7 +1145,7 @@ assert rename_actions[0].new_name.startswith("IMG_20240715_")
 ### ManifestEntry（v0.2 版本）
 ```json
 {
-  "op_id": "20260212_143025_001_a3b5c7",
+  "op_id": "op_3f4a8c2d9a10b4c1",
   "action": "MOVE",
   "src_path": "C:/Photos/IMG_1234.heic",
   "dst_path": "C:/Photos/Processed_20260212_143000/KEEP/IMG_20240715_143000_0001.heic",

@@ -25,6 +25,27 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 - Dry-run 報告新增重複檔案統計
 - 單元測試與整合測試更新
 
+## v0.2.0（進行中）
+- 新增 `safe_op` 配置化重試機制（`retry.max_retries`、`retry.backoff_base_sec`、`retry.backoff_cap_sec`）
+- 檔案操作新增 `safe_copy2`、`safe_move`、`safe_makedirs`、`safe_stat`，失敗時回傳 `OperationResult`
+- `move_or_copy` 改為透過安全包裝執行，支援網路磁碟暫時性錯誤重試
+- manifest 新增 `op_id` 與狀態流轉欄位（`PLANNED`/`STARTED`/`SUCCESS`/`FAILED`）
+- 新增 `generate_op_id()`、`update_manifest_status()`、`load_manifest_with_status()`
+- 新增 `ResumeManager` 與 GUI `Resume` 按鈕，可自動找最近一次 `manifest.jsonl` 並續跑未完成操作
+- Executor 執行前會略過 `SUCCESS` 的 `op_id`，並在執行中更新 manifest 狀態
+- 新增網路容錯整合測試（重試成功、部分失敗、Resume 跳過已完成）
+- 掃描階段新增 `file_type` 分類（`IMAGE`/`VIDEO`/`OTHER`）
+- 新增 `file_extensions.image`、`file_extensions.video`、`move_other_to_keep` 設定
+- `VIDEO`/`OTHER` 不做縮圖判定與 pHash；`VIDEO` 保留 exact dedupe、`OTHER` 預設只統計
+- `move_other_to_keep=true` 時，`OTHER` 會搬移到 `KEEP/OTHER/`
+- 新增 Live Photo 配對（同資料夾 + 時間差 <= 2 秒 + 副檔名條件），採兩階段候選 + 最小時間差一對一匹配
+- Live Photo 重新命名共用基底：`IMG_yyyyMMdd_HHmmss_####.ext`（照片與配對影片同基底）
+- 新增 `enable_rename`（預設 `false`）與 GUI「啟用重新命名」勾選
+- 新增 `resolve_name_conflict()`，命名衝突採可重現 `_0001`、`_0002`…遞增
+- 新增螢幕截圖偵測與歸檔：`group_screenshots`、`screenshots_dest`、`screenshot_detection_mode`（strict/relaxed）
+- strict 模式支援 PNG metadata（`img.info`，含 tEXt/iTXt/XMP 關鍵字命中），relaxed 可加檔名規則
+- 截圖歸檔流程：先 MOVE 到 `KEEP/Screenshots/{YYYY}-{MM}/`，若開啟重新命名再追加 RENAME
+
 ## v0.3 已完成
 - 安全搬移/跨磁碟 copy 機制
 - Execute 流程接線（GUI + manifest 追加執行結果）
@@ -118,6 +139,9 @@ A Windows photo organizer that **never deletes files**. It isolates recovered th
 ## 設定檔
 - 預設設定：`config/default_config.json`
 - 目前提供欄位：
+   - `retry.max_retries`
+   - `retry.backoff_base_sec`
+   - `retry.backoff_cap_sec`
   - `phash.threshold`
   - `thumbnail.max_size_kb`
   - `thumbnail.max_dimension_px`
