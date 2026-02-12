@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -9,6 +10,32 @@ from typing import Dict, Iterable
 
 from ..core.manifest import ManifestContext, ManifestWriter
 from ..models import ManifestEntry
+
+
+REPORT_FIELDNAMES = [
+    "op_id",
+    "action",
+    "src_path",
+    "dst_path",
+    "status",
+    "reason",
+    "error_code",
+    "error_message",
+    "retry_count",
+    "elapsed_time_sec",
+    "size_bytes",
+    "resolution",
+    "hash_md5",
+    "hash_sha256",
+    "timestamp_locked",
+    "timestamp_source",
+    "file_type",
+    "is_live_pair",
+    "pair_id",
+    "pair_confidence",
+    "is_screenshot",
+    "screenshot_evidence",
+]
 
 
 @dataclass
@@ -64,6 +91,20 @@ def write_summary(report_dir: Path, info: SummaryInfo) -> Path:
     summary_path = report_dir / "summary.txt"
     summary_path.write_text(build_summary_text(info), encoding="utf-8")
     return summary_path
+
+
+def write_report_csv(report_dir: Path, entries: Iterable[ManifestEntry]) -> Path:
+    report_path = report_dir / "report.csv"
+    with report_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=REPORT_FIELDNAMES)
+        writer.writeheader()
+        for entry in entries:
+            payload = entry.to_dict()
+            row: dict[str, object] = {}
+            for field in REPORT_FIELDNAMES:
+                row[field] = payload.get(field)
+            writer.writerow(row)
+    return report_path
 
 
 def build_summary_text(info: SummaryInfo) -> str:

@@ -71,6 +71,7 @@ def _run_dry_run(args: argparse.Namespace, config: ConfigManager) -> None:
     )
 
     reporting.write_summary(pipeline_result.report_dir, pipeline_result.summary_info)
+    reporting.write_report_csv(pipeline_result.report_dir, pipeline_result.manifest_entries)
     manifest_context = ManifestContext.from_run(
         run_id=output_root.name,
         mode="Full Run (Dry-run)",
@@ -103,6 +104,7 @@ def _run_execute(args: argparse.Namespace, config: ConfigManager) -> None:
     )
 
     reporting.write_summary(pipeline_result.report_dir, pipeline_result.summary_info)
+    reporting.write_report_csv(pipeline_result.report_dir, pipeline_result.manifest_entries)
     manifest_context = ManifestContext.from_run(
         run_id=output_root.name,
         mode="Full Run (Dry-run)",

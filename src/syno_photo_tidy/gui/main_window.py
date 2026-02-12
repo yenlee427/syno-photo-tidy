@@ -178,6 +178,7 @@ class MainWindow:
             self.queue.put({"type": "log", "message": "No changes needed"})
 
         reporting.write_summary(pipeline_result.report_dir, pipeline_result.summary_info)
+        reporting.write_report_csv(pipeline_result.report_dir, pipeline_result.manifest_entries)
         manifest_context = ManifestContext.from_run(
             run_id=output_root.name,
             mode=f"{self.mode_var.get()} (Dry-run)",
