@@ -93,17 +93,17 @@
 ### PR #17: Safe Operation 包裝與重試機制 (0.5天)
 
 **工作內容**：
-- [ ] 實作 `utils/file_ops.py` 新增 `safe_op` 裝飾器
+- [x] 實作 `utils/file_ops.py` 新增 `safe_op` 裝飾器
   - 支援 3-5 次重試（可配置）
   - 指數退避：1s → 2s → 4s → 8s
   - 捕捉 `OSError`、`PermissionError`、`WinError` 等常見網路 I/O 錯誤
-- [ ] 包裝所有檔案操作函式：
+- [x] 包裝所有檔案操作函式：
   - `safe_copy2(src, dst)` - 複製檔案（含 metadata）
   - `safe_move(src, dst)` - 移動檔案（同磁碟）
   - `safe_makedirs(path)` - 建立目錄
   - `safe_stat(path)` - 取得檔案資訊
-- [ ] 實作重試日誌記錄（每次重試寫 log）
-- [ ] 實作最終失敗處理（回傳 `OperationResult` 物件，含 success/error_message）
+- [x] 實作重試日誌記錄（每次重試寫 log）
+- [x] 實作最終失敗處理（回傳 `OperationResult` 物件，含 success/error_message）
 
 **驗收標準**：
 ```python
@@ -194,17 +194,17 @@ def safe_op(*,
 ### PR #18: Manifest 狀態管理與 op_id 系統 (0.5天)
 
 **工作內容**：
-- [ ] 更新 `models/manifest_entry.py`：
+- [x] 更新 `models/manifest_entry.py`：
   - 新增 `op_id: str` 欄位（唯一識別碼）
   - 新增 `status: str` 欄位（`PLANNED` | `STARTED` | `SUCCESS` | `FAILED`）
   - 新增 `error_message: Optional[str]` 欄位
   - 新增 `retry_count: int` 欄位
   - 新增 `elapsed_time_sec: float` 欄位
-- [ ] 實作 `core/manifest.py` 新增函式：
+- [x] 實作 `core/manifest.py` 新增函式：
   - `generate_op_id(action, src_path, dst_path, extra) -> str` - 產生可重現的 op_id（SHA-256）
   - `update_manifest_status(op_id, status, ...)` - 更新特定操作狀態
   - `load_manifest_with_status(path) -> List[ManifestEntry]` - 讀取並解析狀態
-- [ ] 實作 manifest.jsonl 寫入邏輯：
+- [x] 實作 manifest.jsonl 寫入邏輯：
   - Phase 5（Dry-run）：寫入 `status=PLANNED`
   - Phase 6（Execute）開始時：更新為 `status=STARTED`
   - Phase 6 完成時：更新為 `status=SUCCESS` 或 `FAILED`
@@ -284,17 +284,17 @@ def generate_op_id(action: str, src_path: Path, dst_path: Path, extra: dict | No
 ### PR #19: Resume 邏輯與 GUI 整合 (0.5天)
 
 **工作內容**：
-- [ ] 實作 `core/resume_manager.py`：
+- [x] 實作 `core/resume_manager.py`：
   - `find_latest_manifest(output_root) -> Optional[Path]` - 自動尋找最近的 manifest
   - `load_resume_plan(manifest_path) -> List[ManifestEntry]` - 載入並過濾待續操作
   - `is_resumable(manifest_path) -> bool` - 檢查 manifest 是否可續跑
   - `validate_manifest(manifest_path) -> ValidationResult` - 驗證 manifest 完整性（解析/欄位/重複 op_id）
-- [ ] 新增 `validate_manifest(manifest_path) -> ValidationResult`：驗證 jsonl 可解析、必要欄位齊全、op_id 不重複、status 合法
-- [ ] 更新 `core/executor.py`：
+- [x] 新增 `validate_manifest(manifest_path) -> ValidationResult`：驗證 jsonl 可解析、必要欄位齊全、op_id 不重複、status 合法
+- [x] 更新 `core/executor.py`：
   - 執行前檢查 `status`，跳過 `SUCCESS` 的操作
   - 執行時先更新為 `STARTED`，完成後更新為 `SUCCESS`/`FAILED`
-- [ ] GUI 新增「Resume 上次執行」按鈕與選擇對話框
-- [ ] 實作 Resume 進度顯示（顯示已完成/待處理比例）
+- [x] GUI 新增「Resume 上次執行」按鈕與選擇對話框
+- [x] 實作 Resume 進度顯示（顯示已完成/待處理比例）
 
 **驗收標準**：
 ```python
@@ -350,16 +350,16 @@ assert len(empty_plan) == 0  # 應顯示 "No changes needed"
 ### PR #20: 斷線容錯測試與整合 (0.5天)
 
 **工作內容**：
-- [ ] 新增測試 `tests/integration/test_network_resilience.py`：
+- [x] 新增測試 `tests/integration/test_network_resilience.py`：
   - 模擬網路中斷（使用 `unittest.mock.patch` 模擬 I/O 錯誤）
   - 驗證重試機制是否正確執行
   - 驗證最終失敗時 manifest 記錄正確
   - 驗證部分成功/部分失敗的情境
-- [ ] 新增測試 `tests/unit/test_resume_manager.py`：
+- [x] 新增測試 `tests/unit/test_resume_manager.py`：
   - 測試自動尋找 manifest
   - 測試過濾已完成操作
   - 測試 Resume 邏輯正確性
-- [ ] 更新 README：
+- [x] 更新 README：
   - 新增 v0.2.0 功能說明
   - 新增 Resume 使用指引
   - 新增網路磁碟機注意事項
@@ -427,16 +427,16 @@ def test_resume_skip_completed():
 ### PR #21: 檔案類型辨識與資料模型更新 (0.5天)
 
 **工作內容**：
-- [ ] 更新 `models/file_info.py`：
+- [x] 更新 `models/file_info.py`：
   - 新增 `file_type: str` 欄位（`IMAGE` | `VIDEO` | `OTHER`）
-- [ ] 實作 `utils/file_classifier.py`：
+- [x] 實作 `utils/file_classifier.py`：
   - `classify_file_type(file_info) -> str` - 依副檔名分類
   - 支援配置檔案定義副檔名清單
-- [ ] 更新 `config/defaults.py`：
+- [x] 更新 `config/defaults.py`：
   - 新增 `file_extensions.image` - 影像副檔名清單
   - 新增 `file_extensions.video` - 影片副檔名清單
   - 新增 `move_other_to_keep` - 是否搬移 OTHER（預設 false）
-- [ ] 更新 `core/scanner.py`：
+- [x] 更新 `core/scanner.py`：
   - 掃描時自動分類 `file_type`
 
 **驗收標準**：
@@ -476,15 +476,15 @@ assert ".mp4" in config.get('file_extensions.video')
 ### PR #22: 差異化處理邏輯與 pHash 跳過 (0.5天)
 
 **工作內容**：
-- [ ] 更新 `core/thumbnail_detector.py`：
+- [x] 更新 `core/thumbnail_detector.py`：
   - VIDEO/OTHER 不進行縮圖判定（直接歸類為 keeper）
-- [ ] 更新 `core/visual_deduper.py`：
+- [x] 更新 `core/visual_deduper.py`：
   - VIDEO 不計算 pHash（跳過近似去重）
   - OTHER 不計算 pHash
-- [ ] 更新 `core/exact_deduper.py`：
+- [x] 更新 `core/exact_deduper.py`：
   - VIDEO 仍進行 exact dedupe（hash 比對）
   - OTHER 不進行去重（直接保留）
-- [ ] 更新 `core/action_planner.py`：
+- [x] 更新 `core/action_planner.py`：
   - OTHER 依 `move_other_to_keep` 配置決定是否產生 MOVE action
   - 目的地：`KEEP/OTHER/`
 
@@ -539,16 +539,16 @@ assert any(
 ### PR #23: Live Photo 配對引擎 (0.75天)
 
 **工作內容**：
-- [ ] 實作 `core/live_photo_matcher.py`：
+- [x] 實作 `core/live_photo_matcher.py`：
   - `find_live_pairs(files) -> List[LivePhotoPair]` - 配對邏輯
   - `is_high_confidence_pair(image, video) -> bool` - 高信心判定
   - `calculate_pair_id(image, video) -> str` - 配對 ID 產生
-- [ ] 配對策略改為「兩階段最佳匹配」（最小時間差，一對一）
-- [ ] 更新 `models/file_info.py`：
+- [x] 配對策略改為「兩階段最佳匹配」（最小時間差，一對一）
+- [x] 更新 `models/file_info.py`：
   - 新增 `is_live_pair: bool` 欄位（預設 false）
   - 新增 `pair_id: Optional[str]` 欄位
   - 新增 `pair_confidence: str` 欄位（`high` | `none`）
-- [ ] 實作配對演算法：
+- [x] 實作配對演算法：
   - 同資料夾過濾
   - 時間戳差異計算（<= 2 秒）
   - 副檔名驗證
@@ -677,16 +677,16 @@ def find_live_pairs(self, files: List[FileInfo]) -> List[LivePhotoPair]:
 ### PR #24: Live Photo 共用命名基底 (0.75天)
 
 **工作內容**：
-- [ ] 更新 `core/renamer.py`：
+- [x] 更新 `core/renamer.py`：
   - 實作 Live Photo 配對檔案共用序號邏輯
   - 確保同一組使用相同 `yyyyMMdd_HHmmss_####` 基底
   - 照片與影片都使用 `IMG_` 前綴（Synology 排序一致）
-- [ ] 新增 `resolve_name_conflict(dst_dir, filename) -> Path`：處理 RENAME/MOVE 目的地同名衝突（不覆蓋，改用 `_0001` 後綴），並確保結果可重現
-- [ ] 實作序號分配演算法：
+- [x] 新增 `resolve_name_conflict(dst_dir, filename) -> Path`：處理 RENAME/MOVE 目的地同名衝突（不覆蓋，改用 `_0001` 後綴），並確保結果可重現
+- [x] 實作序號分配演算法：
   - 全域計數器（依 timestamp 排序）
   - Live Photo 配對共享序號
   - 未配對影片使用 `VID_` 前綴（若啟用重新命名）
-- [ ] 更新 manifest.jsonl 與 report.csv 記錄格式
+- [x] 更新 manifest.jsonl 與 report.csv 記錄格式
 
 **驗收標準**：
 ```python
@@ -764,16 +764,16 @@ assert renamed1 == renamed2
 ### PR #25: GUI Rename Checkbox 與邏輯接線 (0.5天)
 
 **工作內容**：
-- [ ] 更新 `gui/main_window.py`：
+- [x] 更新 `gui/main_window.py`：
   - 新增 checkbox「啟用重新命名」（預設關閉）
   - 位置：進階設定區塊
-- [ ] 更新 `config/manager.py`：
+- [x] 更新 `config/manager.py`：
   - 新增 `enable_rename: bool` 配置項（預設 false）
-- [ ] 更新 `core/action_planner.py`：
+- [x] 更新 `core/action_planner.py`：
   - 檢查 `enable_rename` 開關
   - 若關閉：不產生任何 RENAME action
   - 若開啟：按既有規則產生 RENAME action
-- [ ] 更新 manifest.jsonl 記錄：
+- [x] 更新 manifest.jsonl 記錄：
   - 記錄 `enable_rename` 狀態到 RUN 區塊
 
 **驗收標準**：
@@ -836,14 +836,14 @@ assert len(set(a.rename_base for a in live_photo_actions)) == 1
 ### PR #26: 螢幕截圖判定引擎 (0.5天)
 
 **工作內容**：
-- [ ] 實作 `core/screenshot_detector.py`：
+- [x] 實作 `core/screenshot_detector.py`：
   - `is_screenshot(file_info, mode) -> Tuple[bool, str]` - 判定函式
   - `detect_from_metadata(file_info) -> Optional[str]` - metadata 檢測（含 EXIF、PNG tEXt/iTXt chunks、XMP）
   - `detect_from_filename(file_info) -> Optional[str]` - 檔名規則檢測
-- [ ] 更新 `models/file_info.py`：
+- [x] 更新 `models/file_info.py`：
   - 新增 `is_screenshot: bool` 欄位（預設 false）
   - 新增 `screenshot_evidence: Optional[str]` 欄位（記錄判定依據）
-- [ ] 更新 `config/defaults.py`：
+- [x] 更新 `config/defaults.py`：
   - 新增 `group_screenshots: bool`（預設 false）
   - 新增 `screenshots_dest: str`（預設 `"KEEP/Screenshots/{YYYY}-{MM}/"`）
   - 新增 `screenshot_detection_mode: str`（預設 `"strict"`）
@@ -930,16 +930,16 @@ def detect_from_metadata(self, file_info: FileInfo) -> Optional[str]:
 ### PR #27: 螢幕截圖歸檔邏輯與 GUI (0.5天)
 
 **工作內容**：
-- [ ] 更新 `core/action_planner.py`：
+- [x] 更新 `core/action_planner.py`：
   - 若 `group_screenshots=true` 且 `is_screenshot=true`：
     1. 產生 MOVE action 到 `screenshots_dest`
     2. 依 `enable_rename` 決定是否產生 RENAME action
   - 目的地路徑生成：`KEEP/Screenshots/{YYYY}-{MM}/`（依 timestamp_locked）
-- [ ] 更新 `gui/settings_panel.py`：
+- [x] 更新 `gui/settings_panel.py`：
   - 新增 checkbox「將螢幕截圖集中歸檔」
   - 新增下拉選單「偵測模式」（strict / relaxed）
   - 新增文字欄位「目的地路徑」（可編輯）
-- [ ] 更新 manifest.jsonl 與 report.csv：
+- [x] 更新 manifest.jsonl 與 report.csv：
   - 記錄 `is_screenshot`、`screenshot_evidence`
 
 **驗收標準**：
@@ -1065,49 +1065,49 @@ assert rename_actions[0].new_name.startswith("IMG_20240715_")
 
 ## 安全規範檢查清單（v0.2 強化版）
 
-- [ ] **不刪除**：全程不呼叫 `delete`/`unlink`/`rmtree`
-- [ ] **可重跑 No-op**：重複執行相同操作時，已完成的操作不重複執行（Resume 邏輯）
-- [ ] **可回滾**：所有 MOVE/RENAME 操作記錄到 manifest.jsonl，支援 Rollback
-- [ ] **跨磁碟警告**：跨磁碟操作顯示明確警告，來源檔案不刪除
-- [ ] **排除規則**：自動排除 `Processed_*`、`ROLLBACK_*`、symlink
-- [ ] **錯誤容忍**：部分失敗不中斷流程，記錄到 manifest 並繼續
-- [ ] **狀態追蹤**：manifest.jsonl 記錄完整狀態（PLANNED → STARTED → SUCCESS/FAILED）
-- [ ] **穩定性**：相同輸入產生相同輸出（排序規則固定、op_id 可重現）
+- [x] **不刪除**：全程不呼叫 `delete`/`unlink`/`rmtree`
+- [x] **可重跑 No-op**：重複執行相同操作時，已完成的操作不重複執行（Resume 邏輯）
+- [x] **可回滾**：所有 MOVE/RENAME 操作記錄到 manifest.jsonl，支援 Rollback
+- [x] **跨磁碟警告**：跨磁碟操作顯示明確警告，來源檔案不刪除
+- [x] **排除規則**：自動排除 `Processed_*`、`ROLLBACK_*`、symlink
+- [x] **錯誤容忍**：部分失敗不中斷流程，記錄到 manifest 並繼續
+- [x] **狀態追蹤**：manifest.jsonl 記錄完整狀態（PLANNED → STARTED → SUCCESS/FAILED）
+- [x] **穩定性**：相同輸入產生相同輸出（排序規則固定、op_id 可重現）
 
 ---
 
 ## 版本發布檢查清單
 
 ### v0.2.0 發布前
-- [ ] 所有單元測試通過（網路容錯、Resume 邏輯）
-- [ ] 整合測試通過（模擬網路中斷、部分失敗）
-- [ ] GUI Resume 按鈕可正常使用
-- [ ] README 更新（功能說明、使用指引）
-- [ ] manifest.jsonl 格式文件更新
+- [x] 所有單元測試通過（網路容錯、Resume 邏輯）
+- [x] 整合測試通過（模擬網路中斷、部分失敗）
+- [x] GUI Resume 按鈕可正常使用
+- [x] README 更新（功能說明、使用指引）
+- [x] manifest.jsonl 格式文件更新
 
 ### v0.2.1 發布前
-- [ ] 檔案類型分類測試通過
-- [ ] VIDEO 不進 pHash 驗證通過
-- [ ] report.csv 含 file_type 欄位
-- [ ] GUI 顯示檔案類型統計
+- [x] 檔案類型分類測試通過
+- [x] VIDEO 不進 pHash 驗證通過
+- [x] report.csv 含 file_type 欄位
+- [x] GUI 顯示檔案類型統計
 
 ### v0.2.2 發布前
-- [ ] Live Photo 配對穩定性測試通過
-- [ ] 共用命名基底驗證通過
-- [ ] Synology Photos 排序測試
-- [ ] manifest.jsonl 含 Live Photo 欄位
+- [x] Live Photo 配對穩定性測試通過
+- [x] 共用命名基底驗證通過
+- [x] Synology Photos 排序測試
+- [x] manifest.jsonl 含 Live Photo 欄位
 
 ### v0.2.3 發布前
-- [ ] GUI checkbox 行為測試
-- [ ] 未勾選時無 RENAME action
-- [ ] 勾選時 RENAME 正確執行
-- [ ] 與 Live Photo 規則無衝突
+- [x] GUI checkbox 行為測試
+- [x] 未勾選時無 RENAME action
+- [x] 勾選時 RENAME 正確執行
+- [x] 與 Live Photo 規則無衝突
 
 ### v0.2.4 發布前
-- [ ] 截圖判定測試通過（strict/relaxed）
-- [ ] 歸檔路徑生成正確（{YYYY}-{MM}）
-- [ ] 與「啟用重新命名」協同正確
-- [ ] GUI 設定區塊完整
+- [x] 截圖判定測試通過（strict/relaxed）
+- [x] 歸檔路徑生成正確（{YYYY}-{MM}）
+- [x] 與「啟用重新命名」協同正確
+- [x] GUI 設定區塊完整
 
 ---
 
