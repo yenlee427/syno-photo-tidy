@@ -19,6 +19,13 @@ class FileInfo:
     timestamp_locked: str
     timestamp_source: str
     scan_machine_timezone: str
+    file_type: str = "OTHER"
+    is_live_pair: bool = False
+    pair_id: Optional[str] = None
+    pair_confidence: str = "none"
+    exif_data: Optional[dict[str, str]] = None
+    is_screenshot: bool = False
+    screenshot_evidence: Optional[str] = None
     hash_md5: Optional[str] = None
     hash_sha256: Optional[str] = None
 
@@ -34,6 +41,13 @@ class FileInfo:
             "timestamp_locked": self.timestamp_locked,
             "timestamp_source": self.timestamp_source,
             "scan_machine_timezone": self.scan_machine_timezone,
+            "file_type": self.file_type,
+            "is_live_pair": self.is_live_pair,
+            "pair_id": self.pair_id,
+            "pair_confidence": self.pair_confidence,
+            "exif_data": self.exif_data,
+            "is_screenshot": self.is_screenshot,
+            "screenshot_evidence": self.screenshot_evidence,
             "hash_md5": self.hash_md5,
             "hash_sha256": self.hash_sha256,
         }

@@ -42,6 +42,9 @@ class VisualDeduper:
         hashed_items: list[tuple[FileInfo, object]] = []
         processed = 0
         for item in files:
+            if item.file_type != "IMAGE":
+                keepers.append(item)
+                continue
             phash = image_utils.compute_phash(item.path, self.logger)
             if phash is None:
                 keepers.append(item)

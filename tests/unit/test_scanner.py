@@ -28,6 +28,10 @@ def test_scanner_basic_scan(tmp_path: Path) -> None:
 
     assert len(results) == 2
     assert any(item.path.name == "sample.jpg" for item in results)
+    image_item = next(item for item in results if item.path.name == "sample.jpg")
+    text_item = next(item for item in results if item.path.name == "note.txt")
+    assert image_item.file_type == "IMAGE"
+    assert text_item.file_type == "OTHER"
 
 
 def test_scanner_exclude_processed_dirs(tmp_path: Path) -> None:

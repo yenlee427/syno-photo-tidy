@@ -45,6 +45,9 @@ class ExactDeduper:
 
         size_groups: dict[int, List[FileInfo]] = {}
         for item in files:
+            if item.file_type == "OTHER":
+                keepers.append(item)
+                continue
             size_groups.setdefault(item.size_bytes, []).append(item)
 
         processed = 0

@@ -38,6 +38,10 @@ class ThumbnailDetector:
         keepers = []
         thumbnails = []
         for item in files:
+            file_type = getattr(item, "file_type", "IMAGE")
+            if file_type in {"VIDEO", "OTHER"}:
+                keepers.append(item)
+                continue
             if self.is_thumbnail(item):
                 thumbnails.append(item)
             else:

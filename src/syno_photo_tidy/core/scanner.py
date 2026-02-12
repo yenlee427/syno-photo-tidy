@@ -8,7 +8,7 @@ from typing import Callable, Optional
 
 from ..config import ConfigManager
 from ..models import FileInfo
-from ..utils import image_utils, path_utils, time_utils
+from ..utils import file_classifier, image_utils, path_utils, time_utils
 from ..utils.logger import get_logger
 
 
@@ -118,12 +118,13 @@ class FileScanner:
 
         resolution = image_utils.get_image_resolution(path, self.logger)
         exif_datetime_original = image_utils.get_exif_datetime_original(path, self.logger)
+        exif_data = image_utils.get_exif_data_map(path, self.logger)
         timestamp_locked, timestamp_source = time_utils.lock_timestamp(
             exif_datetime_original, windows_created_time
         )
         scan_machine_timezone = time_utils.get_scan_timezone()
 
-        return FileInfo(
+        file_info = FileInfo(
             path=path,
             size_bytes=size_bytes,
             ext=ext,
@@ -134,4 +135,7 @@ class FileScanner:
             timestamp_locked=timestamp_locked,
             timestamp_source=timestamp_source,
             scan_machine_timezone=scan_machine_timezone,
+            exif_data=exif_data,
         )
+        file_info.file_type = file_classifier.classify_file_type(file_info, self.config)
+        return file_info

@@ -11,6 +11,7 @@ class DummyFileInfo:
     size_bytes: int
     resolution: Optional[Tuple[int, int]]
     path: Path = Path("test.jpg")
+    file_type: str = "IMAGE"
 
 
 def test_thumbnail_rule_a() -> None:
@@ -40,3 +41,15 @@ def test_thumbnail_classify_files() -> None:
     keepers, thumbnails = detector.classify_files(files)
     assert len(keepers) == 1
     assert len(thumbnails) == 1
+
+
+def test_thumbnail_video_and_other_are_keepers() -> None:
+    detector = ThumbnailDetector(ConfigManager())
+    files = [
+        DummyFileInfo(size_bytes=10 * 1000, resolution=(320, 240), file_type="VIDEO"),
+        DummyFileInfo(size_bytes=10 * 1000, resolution=(320, 240), file_type="OTHER"),
+    ]
+
+    keepers, thumbnails = detector.classify_files(files)
+    assert len(keepers) == 2
+    assert len(thumbnails) == 0

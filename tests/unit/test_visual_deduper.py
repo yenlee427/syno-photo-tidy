@@ -28,3 +28,20 @@ def test_visual_deduper_detects_duplicates(tmp_path: Path) -> None:
 
     assert len(result.keepers) == 1
     assert len(result.duplicates) == 1
+
+
+def test_visual_deduper_skip_video(tmp_path: Path) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    video_path = source_dir / "clip.mp4"
+    video_path.write_bytes(b"video-bytes")
+
+    scanner = FileScanner(ConfigManager())
+    scanned = scanner.scan_directory(source_dir)
+
+    deduper = VisualDeduper(ConfigManager())
+    result = deduper.dedupe(scanned)
+
+    assert len(result.groups) == 0
+    assert len(result.duplicates) == 0
+    assert len(result.keepers) == 1
