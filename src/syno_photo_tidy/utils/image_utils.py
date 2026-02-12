@@ -53,6 +53,28 @@ def get_exif_datetime_original(path: Path, logger=None) -> Optional[str]:
         return None
 
 
+def get_exif_data_map(path: Path, logger=None) -> dict[str, str]:
+    _register_heif_opener()
+    try:
+        with Image.open(path) as image:
+            exif = image.getexif()
+            if not exif:
+                return {}
+            result: dict[str, str] = {}
+            for tag_id, value in exif.items():
+                key = str(tag_id)
+                if isinstance(value, bytes):
+                    text = value.decode("utf-8", errors="ignore")
+                else:
+                    text = str(value)
+                result[key] = text
+            return result
+    except Exception as exc:
+        if logger is not None:
+            logger.warning(f"無法讀取 EXIF map: {path} ({exc})")
+        return {}
+
+
 def compute_phash(path: Path, logger=None):
     _register_heif_opener()
     try:
