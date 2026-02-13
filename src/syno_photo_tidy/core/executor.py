@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
+import logging
+from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
+import queue
 import threading
 import time
 from typing import Callable, Iterable, Optional
@@ -45,14 +49,22 @@ class PlanExecutor:
         success_op_ids: set[str] = set()
         run_total_bytes = _sum_plan_bytes(plan_items)
         run_processed_bytes = 0
+        run_started_at = time.time()
+        file_speeds: list[float] = []
 
         if cancel_token is None and cancel_event is not None:
             cancel_token = _EventCancellationToken(cancel_event)
 
+        run_logger = _ProgressRunLogger(manifest_path.parent if manifest_path is not None else None)
+        run_logger.start()
+
+        def emit_event(event: ProgressEvent) -> None:
+            self._emit(progress_callback, event)
+            run_logger.log_event(event)
+
         heartbeat = HeartbeatTicker(
             interval_sec=float(self.config.get("progress.heartbeat_interval_sec", 2.0)),
-            callback=lambda: self._emit(
-                progress_callback,
+            callback=lambda: emit_event(
                 ProgressEvent(
                     event_type=ProgressEventType.HEARTBEAT,
                     phase_name=phase_name,
@@ -76,8 +88,7 @@ class PlanExecutor:
                     success_op_ids.add(manifest_entry.op_id)
 
         try:
-            self._emit(
-                progress_callback,
+            emit_event(
                 ProgressEvent(
                     event_type=ProgressEventType.PHASE_START,
                     phase_name=phase_name,
@@ -100,8 +111,7 @@ class PlanExecutor:
 
                 item_size = _get_size_bytes(item.src_path) or 0
                 item_started = time.time()
-                self._emit(
-                    progress_callback,
+                emit_event(
                     ProgressEvent(
                         event_type=ProgressEventType.FILE_START,
                         phase_name=phase_name,
@@ -115,8 +125,7 @@ class PlanExecutor:
                 )
 
                 def on_bytes(file_processed: int, file_total: int) -> None:
-                    self._emit(
-                        progress_callback,
+                    emit_event(
                         ProgressEvent(
                             event_type=ProgressEventType.FILE_PROGRESS,
                             phase_name=phase_name,
@@ -153,9 +162,9 @@ class PlanExecutor:
                 speed_mbps = 0.0
                 if elapsed_ms > 0 and item_size > 0:
                     speed_mbps = item_size / (elapsed_ms / 1000.0) / 1024 / 1024
+                    file_speeds.append(speed_mbps)
 
-                self._emit(
-                    progress_callback,
+                emit_event(
                     ProgressEvent(
                         event_type=ProgressEventType.FILE_DONE,
                         phase_name=phase_name,
@@ -177,8 +186,7 @@ class PlanExecutor:
                     else:
                         slow_speed_streak = 0
                     if not slow_warning_sent and slow_speed_streak >= slow_network_check_count:
-                        self._emit(
-                            progress_callback,
+                        emit_event(
                             ProgressEvent(
                                 event_type=ProgressEventType.SLOW_NETWORK_WARNING,
                                 phase_name=phase_name,
@@ -196,16 +204,32 @@ class PlanExecutor:
         finally:
             heartbeat.stop()
 
-        self._emit(
-            progress_callback,
+        emit_event(
             ProgressEvent(
                 event_type=ProgressEventType.PHASE_END,
                 phase_name=phase_name,
                 run_total_bytes=run_total_bytes,
                 run_processed_bytes=run_processed_bytes,
                 status="CANCELLED" if cancelled else "DONE",
+                evidence=(
+                    f"success={len(executed)}, failed={len(failed)}, "
+                    f"cancelled={cancelled}, total_files={len(plan_items)}"
+                ),
             ),
         )
+
+        elapsed_sec = max(0.0, time.time() - run_started_at)
+        run_logger.write_summary(
+            total_files=len(plan_items),
+            success_count=len(executed),
+            failed_count=len(failed),
+            cancelled=cancelled,
+            total_elapsed_sec=elapsed_sec,
+            average_speed_mbps=(sum(file_speeds) / len(file_speeds)) if file_speeds else 0.0,
+            min_speed_mbps=min(file_speeds) if file_speeds else 0.0,
+            max_speed_mbps=max(file_speeds) if file_speeds else 0.0,
+        )
+        run_logger.stop()
 
         return ExecutionResult(
             executed_entries=executed,
@@ -368,3 +392,86 @@ class HeartbeatTicker:
     def _run(self) -> None:
         while not self._stop_event.wait(self._interval_sec):
             self._callback()
+
+
+class _ProgressRunLogger:
+    def __init__(self, report_dir: Path | None) -> None:
+        self.report_dir = report_dir
+        self._logger: logging.Logger | None = None
+        self._listener: QueueListener | None = None
+        self._file_handler: logging.Handler | None = None
+
+    def start(self) -> None:
+        if self.report_dir is None:
+            return
+        self.report_dir.mkdir(parents=True, exist_ok=True)
+        run_filename = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        run_log_path = self.report_dir / run_filename
+
+        queue_obj: queue.Queue = queue.Queue()
+        file_handler = logging.FileHandler(run_log_path, encoding="utf-8")
+        file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+
+        logger_name = f"syno_photo_tidy.runlog.{id(self)}"
+        logger = logging.getLogger(logger_name)
+        logger.handlers.clear()
+        logger.propagate = False
+        logger.setLevel(logging.INFO)
+        logger.addHandler(QueueHandler(queue_obj))
+
+        listener = QueueListener(queue_obj, file_handler, respect_handler_level=True)
+        listener.start()
+
+        self._logger = logger
+        self._listener = listener
+        self._file_handler = file_handler
+
+    def stop(self) -> None:
+        if self._listener is not None:
+            self._listener.stop()
+        if self._file_handler is not None:
+            self._file_handler.close()
+        if self._logger is not None:
+            self._logger.handlers.clear()
+
+    def log_event(self, event: ProgressEvent) -> None:
+        if self._logger is None:
+            return
+        self._logger.info(
+            "[%s] phase=%s op=%s file=%s run=%s/%s status=%s speed=%.2f evidence=%s",
+            event.event_type.value,
+            event.phase_name or "-",
+            event.op_type or "-",
+            event.file_path or "-",
+            event.run_processed_bytes if event.run_processed_bytes is not None else "-",
+            event.run_total_bytes if event.run_total_bytes is not None else "-",
+            event.status or "-",
+            event.speed_mbps if event.speed_mbps is not None else 0.0,
+            event.evidence or "-",
+        )
+
+    def write_summary(
+        self,
+        *,
+        total_files: int,
+        success_count: int,
+        failed_count: int,
+        cancelled: bool,
+        total_elapsed_sec: float,
+        average_speed_mbps: float,
+        min_speed_mbps: float,
+        max_speed_mbps: float,
+    ) -> None:
+        if self._logger is None:
+            return
+        self._logger.info(
+            "[SUMMARY] total=%s success=%s failed=%s cancelled=%s elapsed=%.2fs avg=%.2fMB/s min=%.2fMB/s max=%.2fMB/s",
+            total_files,
+            success_count,
+            failed_count,
+            cancelled,
+            total_elapsed_sec,
+            average_speed_mbps,
+            min_speed_mbps,
+            max_speed_mbps,
+        )

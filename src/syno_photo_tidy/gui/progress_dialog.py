@@ -74,12 +74,21 @@ class ProgressDialog(tk.Toplevel):
         self.heartbeat_label.pack(anchor=tk.W, pady=(0, 8))
 
         self.network_warning_var = tk.StringVar(value="")
+        self.network_warning_frame = ttk.Frame(container)
         self.network_warning_label = ttk.Label(
-            container,
+            self.network_warning_frame,
             textvariable=self.network_warning_var,
             anchor="w",
             justify="left",
         )
+        self.network_warning_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.network_warning_hide_button = ttk.Button(
+            self.network_warning_frame,
+            text="收合",
+            width=6,
+            command=self._hide_network_warning,
+        )
+        self.network_warning_hide_button.pack(side=tk.RIGHT, padx=(8, 0))
 
         ttk.Label(container, text="日誌:").pack(anchor=tk.W)
         self.log_viewer = LogViewer(container, max_lines=log_max_lines)
@@ -136,7 +145,7 @@ class ProgressDialog(tk.Toplevel):
         if event.event_type == ProgressEventType.SLOW_NETWORK_WARNING:
             warning_text = event.evidence or "偵測到網路速度偏慢，可能影響處理時間"
             self.network_warning_var.set(f"⚠ 慢速網路警告：{warning_text}")
-            self.network_warning_label.pack(fill=tk.X, pady=(0, 8))
+            self.network_warning_frame.pack(fill=tk.X, pady=(0, 8))
 
         if event.event_type == ProgressEventType.FILE_START:
             if event.phase_name == "Hashing" and self._hash_progress_workers > 1:
@@ -153,6 +162,8 @@ class ProgressDialog(tk.Toplevel):
 
         if event.status and event.event_type in {ProgressEventType.FILE_DONE, ProgressEventType.PHASE_END}:
             self.update_detail(f"狀態: {event.status}")
+        if event.event_type == ProgressEventType.PHASE_END and event.evidence:
+            self.add_line(f"階段摘要：{event.evidence}")
 
         self.update_heartbeat()
 
@@ -168,6 +179,9 @@ class ProgressDialog(tk.Toplevel):
     def _on_close(self) -> None:
         self._on_cancel()
         self.close()
+
+    def _hide_network_warning(self) -> None:
+        self.network_warning_frame.pack_forget()
 
     def _update_elapsed(self) -> None:
         elapsed = int(time.time() - self._start_time)

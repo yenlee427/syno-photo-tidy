@@ -27,6 +27,17 @@
 - Execute 流程加入 cooperative cancellation：取消後在下一個 chunk 內中止。
 - Executor 加入 HEARTBEAT 定時事件（與檔案數無關）與慢速網路防誤判偵測。
 
+## 目前重點功能（v0.3.2）
+- UI log 改為 ring buffer（`deque(maxlen=N)`），長時間執行仍保持流暢。
+- Execute 期間建立 `REPORT/run_*.log`，完整記錄所有進度事件。
+- 使用 `QueueHandler + QueueListener` 非同步寫檔，降低 I/O 對 UI 的影響。
+- 每個階段結束（`PHASE_END`）會附帶摘要統計並顯示在進度視窗日誌。
+
+## 目前重點功能（v0.3.3）
+- `MainWindow._run_execute()` 已完整接線：worker 透過 queue 回傳 `progress_event`。
+- `ProgressDialog` 會即時顯示 bytes 進度、速度、ETA、心跳與慢速警告。
+- Execute 期間至少會有可見更新（檔案進度或 HEARTBEAT），降低「像當機」的感受。
+
 ## 設定檔
 預設檔案：`config/default_config.json`
 
@@ -87,3 +98,9 @@ pytest -q
 - 確認進度條、速度與 ETA 持續更新，且 `Last update` 會持續刷新。
 - 執行中按「取消」，確認在下一個 chunk 內停止並顯示取消狀態。
 - 以跨磁碟路徑測試 MOVE 行為，確認實際為 COPY 且來源檔案仍保留。
+
+## 手動驗證（v0.3.2 / v0.3.3）
+- 連續處理大量檔案（例如 5000+）時，確認 UI log 仍順暢且只保留最後 N 行。
+- 執行後到 `REPORT/` 檢查 `run_*.log`，確認含 `PHASE_START/FILE_PROGRESS/HEARTBEAT/PHASE_END`。
+- 在慢速網路磁碟（SMB/NAS）跑大檔，確認符合條件（>=5MB 且 >=300ms）才出現慢速警告。
+- 在 Hashing 多執行緒時，確認目前檔案固定顯示 `Hashing (N workers)...`，不會跳動。
