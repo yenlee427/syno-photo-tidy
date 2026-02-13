@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from syno_photo_tidy.core import PlanExecutor
-from syno_photo_tidy.models import ActionItem
+from syno_photo_tidy.models import ActionItem, ProgressEventType
 
 
 def test_execute_plan_moves_file(tmp_path: Path) -> None:
@@ -50,3 +50,22 @@ def test_execute_plan_archives_file(tmp_path: Path) -> None:
     assert len(result.executed_entries) == 1
     assert result.executed_entries[0].status in {"MOVED", "COPIED"}
     assert dst.exists()
+
+
+def test_execute_plan_emits_progress_events(tmp_path: Path) -> None:
+    src = tmp_path / "source.txt"
+    dst = tmp_path / "dest" / "moved.txt"
+    src.write_text("data", encoding="utf-8")
+
+    plan = [ActionItem(action="MOVE", reason="THUMBNAIL", src_path=src, dst_path=dst)]
+    executor = PlanExecutor()
+    events = []
+
+    result = executor.execute_plan(plan, progress_callback=events.append, phase_name="Moving")
+
+    assert result.cancelled is False
+    event_types = {event.event_type for event in events}
+    assert ProgressEventType.PHASE_START in event_types
+    assert ProgressEventType.FILE_START in event_types
+    assert ProgressEventType.FILE_DONE in event_types
+    assert ProgressEventType.PHASE_END in event_types
