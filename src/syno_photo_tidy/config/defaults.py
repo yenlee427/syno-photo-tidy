@@ -41,4 +41,16 @@ DEFAULT_CONFIG = {
         "max_dimension_px": 640,
         "min_dimension_px": 320,
     },
+    "progress": {
+        "ui_update_interval_ms": 250,
+        "heartbeat_interval_sec": 2.0,
+        "bytes_update_threshold": 1048576,
+        "speed_window_sec": 5,
+        "slow_network_threshold_mbps": 5.0,
+        "slow_network_check_count": 3,
+        "slow_network_min_bytes": 5242880,
+        "slow_network_min_elapsed_ms": 300,
+        "hash_progress_workers": 4,
+        "log_max_lines": 500,
+    },
 }

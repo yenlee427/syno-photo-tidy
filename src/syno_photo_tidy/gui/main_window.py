@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import queue
 import threading
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from pathlib import Path
 from typing import Optional
 
 from ..config import ConfigManager
+from ..models import ProgressEvent
 from ..core import (
     ManifestContext,
     Pipeline,
@@ -50,10 +52,14 @@ class MainWindow:
         self._last_report_dir: Optional[Path] = None
         self._resume_manifest_path: Optional[Path] = None
         self._progress_dialog: Optional[ProgressDialog] = None
+        self._last_progress_update_ts = 0.0
+        self._queue_poll_interval_ms = int(self.config.get("progress.ui_update_interval_ms", 250))
+        self._queue_poll_interval_ms = max(100, min(1000, self._queue_poll_interval_ms))
 
         self._build_layout()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.after(100, self._poll_queue)
+        self.root.after(self._queue_poll_interval_ms, self._refresh_progress_heartbeat)
 
     def _build_layout(self) -> None:
         container = ttk.Frame(self.root, padding=12)
@@ -368,6 +374,12 @@ class MainWindow:
                 elif item_type == "enable_execute":
                     state = "normal" if item.get("value") else "disabled"
                     self.execute_button.configure(state=state)
+                elif item_type == "progress_event":
+                    event = item.get("event")
+                    if isinstance(event, ProgressEvent):
+                        self._last_progress_update_ts = time.time()
+                        if self._progress_dialog is not None:
+                            self._progress_dialog.handle_progress_event(event)
                 elif item_type == "done":
                     self._is_running = False
                     self.dry_run_button.configure(state="normal")
@@ -376,7 +388,7 @@ class MainWindow:
                     self._close_progress_dialog()
         except queue.Empty:
             pass
-        self.root.after(100, self._poll_queue)
+        self.root.after(self._queue_poll_interval_ms, self._poll_queue)
 
     def _open_progress_dialog(self, title: str, allow_cancel: bool) -> None:
         self._close_progress_dialog()
@@ -385,6 +397,9 @@ class MainWindow:
             title=title,
             allow_cancel=allow_cancel,
             cancel_callback=self._on_cancel,
+            speed_window_sec=float(self.config.get("progress.speed_window_sec", 5)),
+            hash_progress_workers=int(self.config.get("progress.hash_progress_workers", 4)),
+            log_max_lines=int(self.config.get("progress.log_max_lines", 500)),
         )
         self._progress_dialog.update_stage("階段: 準備中")
 
@@ -395,6 +410,13 @@ class MainWindow:
 
     def _on_cancel(self) -> None:
         self.cancel_event.set()
+        if self._progress_dialog is not None:
+            self._progress_dialog.show_cancelling()
+
+    def _refresh_progress_heartbeat(self) -> None:
+        if self._progress_dialog is not None:
+            self._progress_dialog.update_heartbeat()
+        self.root.after(self._queue_poll_interval_ms, self._refresh_progress_heartbeat)
 
     def _select_rollback_dir(self) -> Optional[Path]:
         candidates = []

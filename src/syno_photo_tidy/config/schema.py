@@ -126,4 +126,37 @@ def validate_config(config: dict[str, Any]) -> list[str]:
     if not isinstance(archive_sequence_digits, int) or archive_sequence_digits <= 0:
         add_error("archive.sequence_digits", "必須是正整數")
 
+    progress = config.get("progress", {})
+    ui_update_interval_ms = progress.get("ui_update_interval_ms", 250)
+    heartbeat_interval_sec = progress.get("heartbeat_interval_sec", 2.0)
+    bytes_update_threshold = progress.get("bytes_update_threshold", 1048576)
+    speed_window_sec = progress.get("speed_window_sec", 5)
+    slow_network_threshold_mbps = progress.get("slow_network_threshold_mbps", 5.0)
+    slow_network_check_count = progress.get("slow_network_check_count", 3)
+    slow_network_min_bytes = progress.get("slow_network_min_bytes", 5242880)
+    slow_network_min_elapsed_ms = progress.get("slow_network_min_elapsed_ms", 300)
+    hash_progress_workers = progress.get("hash_progress_workers", 4)
+    log_max_lines = progress.get("log_max_lines", 500)
+
+    if not isinstance(ui_update_interval_ms, int) or ui_update_interval_ms <= 0:
+        add_error("progress.ui_update_interval_ms", "必須是正整數")
+    if not isinstance(heartbeat_interval_sec, (int, float)) or heartbeat_interval_sec <= 0:
+        add_error("progress.heartbeat_interval_sec", "必須是大於 0 的數值")
+    if not isinstance(bytes_update_threshold, int) or bytes_update_threshold <= 0:
+        add_error("progress.bytes_update_threshold", "必須是正整數")
+    if not isinstance(speed_window_sec, (int, float)) or speed_window_sec <= 0:
+        add_error("progress.speed_window_sec", "必須是大於 0 的數值")
+    if not isinstance(slow_network_threshold_mbps, (int, float)) or slow_network_threshold_mbps <= 0:
+        add_error("progress.slow_network_threshold_mbps", "必須是大於 0 的數值")
+    if not isinstance(slow_network_check_count, int) or slow_network_check_count <= 0:
+        add_error("progress.slow_network_check_count", "必須是正整數")
+    if not isinstance(slow_network_min_bytes, int) or slow_network_min_bytes <= 0:
+        add_error("progress.slow_network_min_bytes", "必須是正整數")
+    if not isinstance(slow_network_min_elapsed_ms, int) or slow_network_min_elapsed_ms <= 0:
+        add_error("progress.slow_network_min_elapsed_ms", "必須是正整數")
+    if not isinstance(hash_progress_workers, int) or hash_progress_workers <= 0:
+        add_error("progress.hash_progress_workers", "必須是正整數")
+    if not isinstance(log_max_lines, int) or log_max_lines <= 0:
+        add_error("progress.log_max_lines", "必須是正整數")
+
     return errors
