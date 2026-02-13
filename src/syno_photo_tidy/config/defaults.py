@@ -22,6 +22,11 @@ DEFAULT_CONFIG = {
         "chunk_size_kb": 1024,
         "parallel_workers": 4,
     },
+    "file_ops": {
+        "copy_chunk_size_kb": 1024,
+        "chunked_copy_threshold_bytes": 10485760,
+        "block_cross_volume_move": False,
+    },
     "phash": {
         "threshold": 8,
     },

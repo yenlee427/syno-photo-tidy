@@ -20,6 +20,13 @@
   - 慢速網路警告區塊（事件觸發時顯示）
 - Hashing 多執行緒時，`current file` 固定顯示 `Hashing (N workers)...`，避免 UI 跳動。
 
+## 目前重點功能（v0.3.1）
+- `hash_calc.compute_hashes()` 支援 bytes 進度回呼與 `CancellationToken`。
+- `file_ops.safe_copy2()` 支援大檔 chunked copy（>10MB）與 bytes 進度回呼。
+- 跨磁碟 MOVE 改為 COPY（保留來源）；可透過設定選擇阻擋跨磁碟 move。
+- Execute 流程加入 cooperative cancellation：取消後在下一個 chunk 內中止。
+- Executor 加入 HEARTBEAT 定時事件（與檔案數無關）與慢速網路防誤判偵測。
+
 ## 設定檔
 預設檔案：`config/default_config.json`
 
@@ -38,6 +45,15 @@
 
   "hash_progress_workers": 4,
   "log_max_lines": 500
+}
+```
+
+### v0.3 檔案操作相關設定
+```json
+"file_ops": {
+  "copy_chunk_size_kb": 1024,
+  "chunked_copy_threshold_bytes": 10485760,
+  "block_cross_volume_move": false
 }
 ```
 
@@ -65,3 +81,9 @@ pytest -q
 - 確認進度視窗可看到「目前檔案 / 目前動作 / 速度 / ETA / Last update」。
 - 在 Hashing 階段（多執行緒）確認目前檔案顯示固定為 `Hashing (N workers)...`。
 - 若有送出慢速網路事件，確認警告區塊顯示提示。
+
+## 手動驗證（v0.3.1）
+- 在網路磁碟準備單一大檔（例如 >100MB），執行 Execute。
+- 確認進度條、速度與 ETA 持續更新，且 `Last update` 會持續刷新。
+- 執行中按「取消」，確認在下一個 chunk 內停止並顯示取消狀態。
+- 以跨磁碟路徑測試 MOVE 行為，確認實際為 COPY 且來源檔案仍保留。

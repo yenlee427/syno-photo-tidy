@@ -82,6 +82,17 @@ def validate_config(config: dict[str, Any]) -> list[str]:
     if not isinstance(parallel_workers, int) or parallel_workers <= 0:
         add_error("hash.parallel_workers", "必須是正整數")
 
+    file_ops = config.get("file_ops", {})
+    copy_chunk_size_kb = file_ops.get("copy_chunk_size_kb", 1024)
+    chunked_copy_threshold_bytes = file_ops.get("chunked_copy_threshold_bytes", 10485760)
+    block_cross_volume_move = file_ops.get("block_cross_volume_move", False)
+    if not isinstance(copy_chunk_size_kb, int) or copy_chunk_size_kb <= 0:
+        add_error("file_ops.copy_chunk_size_kb", "必須是正整數")
+    if not isinstance(chunked_copy_threshold_bytes, int) or chunked_copy_threshold_bytes <= 0:
+        add_error("file_ops.chunked_copy_threshold_bytes", "必須是正整數")
+    if not isinstance(block_cross_volume_move, bool):
+        add_error("file_ops.block_cross_volume_move", "必須是布林值")
+
     phash = config.get("phash", {})
     threshold = phash.get("threshold")
     if not isinstance(threshold, int):

@@ -23,6 +23,7 @@ from ..core import (
     load_manifest_with_status,
 )
 from ..utils import reporting, time_utils
+from ..utils.cancel import CancellationToken
 from ..utils.logger import get_logger
 from .settings_panel import SettingsPanel
 from .progress_dialog import ProgressDialog
@@ -37,7 +38,7 @@ class MainWindow:
         self.config = config or ConfigManager()
         self.logger = get_logger(self.__class__.__name__)
         self.pipeline = Pipeline(self.config, self.logger)
-        self.executor = PlanExecutor(self.logger)
+        self.executor = PlanExecutor(self.logger, self.config)
         self.resume_manager = ResumeManager()
         self.rollback_runner = RollbackRunner(self.logger)
         self.root = tk.Tk()
@@ -52,6 +53,7 @@ class MainWindow:
         self._last_report_dir: Optional[Path] = None
         self._resume_manifest_path: Optional[Path] = None
         self._progress_dialog: Optional[ProgressDialog] = None
+        self._cancel_token: Optional[CancellationToken] = None
         self._last_progress_update_ts = 0.0
         self._queue_poll_interval_ms = int(self.config.get("progress.ui_update_interval_ms", 250))
         self._queue_poll_interval_ms = max(100, min(1000, self._queue_poll_interval_ms))
@@ -137,6 +139,7 @@ class MainWindow:
 
         self._is_running = True
         self.cancel_event.clear()
+        self._cancel_token = CancellationToken()
         self.dry_run_button.configure(state="disabled")
         self.resume_button.configure(state="disabled")
         self._open_progress_dialog(title="Dry-run", allow_cancel=True)
@@ -322,6 +325,11 @@ class MainWindow:
             result = self.executor.execute_plan(
                 plan,
                 cancel_event=self.cancel_event,
+                cancel_token=self._cancel_token,
+                phase_name=label,
+                progress_callback=lambda event: self.queue.put(
+                    {"type": "progress_event", "event": event}
+                ),
                 manifest_path=manifest_path,
             )
             executed_entries.extend(result.executed_entries)
@@ -349,6 +357,7 @@ class MainWindow:
         self.queue.put({"type": "progress", "value": 100})
         self.queue.put({"type": "stage", "message": "階段: 完成"})
         self._resume_manifest_path = None
+        self._cancel_token = None
         self.queue.put({"type": "done"})
 
     def _poll_queue(self) -> None:
@@ -410,6 +419,8 @@ class MainWindow:
 
     def _on_cancel(self) -> None:
         self.cancel_event.set()
+        if self._cancel_token is not None:
+            self._cancel_token.set()
         if self._progress_dialog is not None:
             self._progress_dialog.show_cancelling()
 

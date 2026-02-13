@@ -121,7 +121,7 @@ def _run_execute(args: argparse.Namespace, config: ConfigManager) -> None:
         print("No changes needed")
         return
 
-    executor = PlanExecutor()
+    executor = PlanExecutor(config=config)
     executed_entries = []
     failed_entries = []
     manifest_path = pipeline_result.report_dir / "manifest.jsonl"

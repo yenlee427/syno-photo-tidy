@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from typing import Iterable, List
+import threading
+import time
+from typing import Callable, Iterable, List, Optional
 
 from ..config import ConfigManager
 from ..models import FileInfo
@@ -32,11 +34,14 @@ class ExactDeduper:
         self.algorithms = self._load_algorithms(config)
         self.chunk_size_kb = int(config.get("hash.chunk_size_kb", 1024))
         self.parallel_workers = int(config.get("hash.parallel_workers", 1))
+        self.progress_bytes_threshold = int(config.get("progress.bytes_update_threshold", 1048576))
+        self.progress_emit_interval_sec = float(config.get("progress.ui_update_interval_ms", 250)) / 1000.0
 
     def dedupe(
         self,
         files: Iterable[FileInfo],
         progress_callback=None,
+        bytes_progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> DedupeResult:
         groups: dict[str, List[FileInfo]] = {}
         keepers: List[FileInfo] = []
@@ -51,6 +56,18 @@ class ExactDeduper:
             size_groups.setdefault(item.size_bytes, []).append(item)
 
         processed = 0
+        hash_total_bytes = sum(
+            item.size_bytes
+            for items in size_groups.values()
+            if len(items) > 1
+            for item in items
+        )
+        aggregator = _HashProgressAggregator(
+            total_bytes=max(0, hash_total_bytes),
+            callback=bytes_progress_callback,
+            bytes_threshold=self.progress_bytes_threshold,
+            emit_interval_sec=self.progress_emit_interval_sec,
+        )
         for items in size_groups.values():
             if len(items) == 1:
                 keepers.extend(items)
@@ -62,6 +79,7 @@ class ExactDeduper:
                     keepers,
                     processed,
                     progress_callback,
+                    aggregator,
                 )
             else:
                 for item in items:
@@ -71,7 +89,10 @@ class ExactDeduper:
                         keepers,
                         processed,
                         progress_callback,
+                        aggregator,
                     )
+
+        aggregator.flush()
 
         for hash_value, items in groups.items():
             if len(items) == 1:
@@ -124,11 +145,21 @@ class ExactDeduper:
         keepers: List[FileInfo],
         processed: int,
         progress_callback,
+        aggregator: "_HashProgressAggregator",
     ) -> int:
+        previous_bytes = 0
+
+        def on_hash_progress(bytes_read: int, _total_size: int) -> None:
+            nonlocal previous_bytes
+            delta = max(0, bytes_read - previous_bytes)
+            previous_bytes = bytes_read
+            aggregator.add(delta)
+
         hashes = hash_calc.compute_hashes(
             item.path,
             algorithms=self.algorithms,
             chunk_size_kb=self.chunk_size_kb,
+            progress_callback=on_hash_progress,
             logger=self.logger,
         )
         item.hash_md5 = hashes.get("md5")
@@ -150,10 +181,11 @@ class ExactDeduper:
         keepers: List[FileInfo],
         processed: int,
         progress_callback,
+        aggregator: "_HashProgressAggregator",
     ) -> int:
         with ThreadPoolExecutor(max_workers=self.parallel_workers) as executor:
             future_map = {
-                executor.submit(self._compute_hashes, item): item for item in items
+                executor.submit(self._compute_hashes, item, aggregator): item for item in items
             }
             for future in as_completed(future_map):
                 item, hashes = future.result()
@@ -169,11 +201,64 @@ class ExactDeduper:
                     progress_callback(processed)
         return processed
 
-    def _compute_hashes(self, item: FileInfo) -> tuple[FileInfo, dict[str, str]]:
+    def _compute_hashes(
+        self,
+        item: FileInfo,
+        aggregator: "_HashProgressAggregator",
+    ) -> tuple[FileInfo, dict[str, str]]:
+        previous_bytes = 0
+
+        def on_hash_progress(bytes_read: int, _total_size: int) -> None:
+            nonlocal previous_bytes
+            delta = max(0, bytes_read - previous_bytes)
+            previous_bytes = bytes_read
+            aggregator.add(delta)
+
         hashes = hash_calc.compute_hashes(
             item.path,
             algorithms=self.algorithms,
             chunk_size_kb=self.chunk_size_kb,
+            progress_callback=on_hash_progress,
             logger=self.logger,
         )
         return item, hashes
+
+
+class _HashProgressAggregator:
+    def __init__(
+        self,
+        *,
+        total_bytes: int,
+        callback: Optional[Callable[[int, int], None]],
+        bytes_threshold: int,
+        emit_interval_sec: float,
+    ) -> None:
+        self.total_bytes = max(0, total_bytes)
+        self.callback = callback
+        self.bytes_threshold = max(1, bytes_threshold)
+        self.emit_interval_sec = max(0.1, emit_interval_sec)
+        self._processed_bytes = 0
+        self._last_emitted_bytes = 0
+        self._last_emitted_time = time.time()
+        self._lock = threading.Lock()
+
+    def add(self, delta_bytes: int) -> None:
+        if self.callback is None or delta_bytes <= 0:
+            return
+        with self._lock:
+            self._processed_bytes += delta_bytes
+            now = time.time()
+            bytes_since_emit = self._processed_bytes - self._last_emitted_bytes
+            if bytes_since_emit >= self.bytes_threshold or (now - self._last_emitted_time) >= self.emit_interval_sec:
+                self.callback(self._processed_bytes, self.total_bytes)
+                self._last_emitted_bytes = self._processed_bytes
+                self._last_emitted_time = now
+
+    def flush(self) -> None:
+        if self.callback is None:
+            return
+        with self._lock:
+            if self._processed_bytes != self._last_emitted_bytes:
+                self.callback(self._processed_bytes, self.total_bytes)
+                self._last_emitted_bytes = self._processed_bytes
+                self._last_emitted_time = time.time()
